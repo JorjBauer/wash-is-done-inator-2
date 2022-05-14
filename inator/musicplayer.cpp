@@ -23,7 +23,8 @@ volatile uint32_t nextMidiEventAt;
 volatile uint16_t midiPtr;
 volatile uint16_t stopAt[4];
 
-#define DEFAULTDELAY (7L * 60L * 1000L) // 7 minutes
+//#define DEFAULTDELAY (7L * 60L * 1000L) // 7 minutes
+#define DEFAULTDELAY 0
 
 MusicPlayer::MusicPlayer()
 {
@@ -144,7 +145,6 @@ uint32_t MusicPlayer::loadNextEvent()
     // Umm, probably want edgar.setLength(track, ?); -- FIXME
     stopAt[track] = duration;
   }
-
   midiPtr++;
 
   return timeTillNext * TEMPO;
