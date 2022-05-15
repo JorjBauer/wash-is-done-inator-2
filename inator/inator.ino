@@ -18,7 +18,7 @@ void loop()
   if (!wavPlaying()) {
     delay(1000);
     showDir();
-    setGain(1.0);
+    setGain(0.1);
     wavStartPlaying("/gravityfalls-mono.wav");
   }
   wavLoop();
