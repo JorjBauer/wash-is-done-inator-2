@@ -2269,7 +2269,6 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <part name="U$2" library="bt" deviceset="VCC" device="" value="5v"/>
 <part name="S1" library="bt_electromech" deviceset="SPST" device="_OFFBOARD_LG"/>
 <part name="GND3" library="SparkFun-PowerSymbols" deviceset="GND2" device=""/>
-<part name="U$4" library="NC_MARKER" deviceset="NC_MARKER" device=""/>
 <part name="U$5" library="NC_MARKER" deviceset="NC_MARKER" device=""/>
 <part name="D3" library="SparkFun-LED" deviceset="LED" device="3MM"/>
 <part name="D4" library="SparkFun-LED" deviceset="LED" device="3MM"/>
@@ -2289,7 +2288,7 @@ Gain
 DIN
 BCLK
 LRC</text>
-<text x="88.9" y="22.86" size="1.778" layer="91">Free pins: A0, D5, D7</text>
+<text x="88.9" y="22.86" size="1.778" layer="91">Free pins: A0, D5, D6, D7 - if we move D3 to A0, we could use a 23LC1024-ISN as external cache</text>
 </plain>
 <instances>
 <instance part="Q1" gate="G$1" x="63.5" y="104.14" smashed="yes">
@@ -2338,7 +2337,6 @@ LRC</text>
 <instance part="GND3" gate="G$1" x="93.98" y="106.68" smashed="yes">
 <attribute name="VALUE" x="93.98" y="104.902" size="1.778" layer="96" align="top-center"/>
 </instance>
-<instance part="U$4" gate="G$1" x="165.1" y="68.58" smashed="yes" rot="R90"/>
 <instance part="U$5" gate="G$1" x="172.72" y="68.58" smashed="yes" rot="R90"/>
 <instance part="D3" gate="G$1" x="139.7" y="134.62" smashed="yes" rot="R270">
 <attribute name="NAME" x="135.128" y="138.049" size="1.778" layer="95" font="vector"/>
@@ -2486,7 +2484,6 @@ LRC</text>
 <net name="N$11" class="0">
 <segment>
 <pinref part="WEMOS1" gate="D1" pin="D6"/>
-<pinref part="U$4" gate="G$1" pin="P$1"/>
 <wire x1="165.1" y1="73.66" x2="165.1" y2="71.12" width="0.1524" layer="91"/>
 </segment>
 </net>
