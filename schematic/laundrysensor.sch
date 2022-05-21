@@ -2260,8 +2260,8 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <part name="Q2" library="Transistor" library_urn="urn:adsk.eagle:library:16378713" deviceset="NPN" device="TO92-EBC" package3d_urn="urn:adsk.eagle:package:16378726/2" technology="_" value="2N3904"/>
 <part name="D1" library="opto-trans-siemens" library_urn="urn:adsk.eagle:library:317" deviceset="SFH205" device="" package3d_urn="urn:adsk.eagle:package:21801/1"/>
 <part name="D2" library="opto-trans-siemens" library_urn="urn:adsk.eagle:library:317" deviceset="SFH205" device="" package3d_urn="urn:adsk.eagle:package:21801/1"/>
-<part name="R1" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="1k"/>
-<part name="R2" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="1k"/>
+<part name="R1" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="100k"/>
+<part name="R2" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="100k"/>
 <part name="GND1" library="SparkFun-PowerSymbols" deviceset="GND2" device=""/>
 <part name="GND2" library="SparkFun-PowerSymbols" deviceset="GND2" device=""/>
 <part name="U$1" library="bt" deviceset="VCC" device="" value="5v"/>
@@ -2272,8 +2272,8 @@ This footprint was designed to help hold the alignment of a through-hole compone
 <part name="U$5" library="NC_MARKER" deviceset="NC_MARKER" device=""/>
 <part name="D3" library="SparkFun-LED" deviceset="LED" device="3MM"/>
 <part name="D4" library="SparkFun-LED" deviceset="LED" device="3MM"/>
-<part name="R3" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="1k"/>
-<part name="R4" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="1k"/>
+<part name="R3" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="220"/>
+<part name="R4" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="220"/>
 <part name="J1" library="SparkFun-Connectors" deviceset="CONN_07" device="" value="Adafruit I2S amplifier MAX98357A"/>
 <part name="R5" library="SparkFun-Resistors" deviceset="100KOHM" device="-HORIZ-1/4W-1%" value="100k"/>
 </parts>
@@ -2299,13 +2299,13 @@ LRC</text>
 <attribute name="NAME" x="43.72" y="79.2" size="1.778" layer="95"/>
 <attribute name="VALUE" x="43.72" y="76.66" size="1.778" layer="96"/>
 </instance>
-<instance part="D1" gate="1" x="50.8" y="116.84" smashed="yes">
-<attribute name="NAME" x="54.356" y="112.522" size="1.778" layer="95" rot="R90"/>
-<attribute name="VALUE" x="56.515" y="112.522" size="1.778" layer="96" rot="R90"/>
+<instance part="D1" gate="1" x="50.8" y="114.3" smashed="yes" rot="R180">
+<attribute name="NAME" x="47.244" y="118.618" size="1.778" layer="95" rot="R270"/>
+<attribute name="VALUE" x="45.085" y="118.618" size="1.778" layer="96" rot="R270"/>
 </instance>
-<instance part="D2" gate="1" x="33.02" y="86.36" smashed="yes">
-<attribute name="NAME" x="36.576" y="82.042" size="1.778" layer="95" rot="R90"/>
-<attribute name="VALUE" x="38.735" y="82.042" size="1.778" layer="96" rot="R90"/>
+<instance part="D2" gate="1" x="33.02" y="83.82" smashed="yes" rot="R180">
+<attribute name="NAME" x="29.464" y="88.138" size="1.778" layer="95" rot="R270"/>
+<attribute name="VALUE" x="27.305" y="88.138" size="1.778" layer="96" rot="R270"/>
 </instance>
 <instance part="R1" gate="G$1" x="63.5" y="119.38" smashed="yes" rot="R90">
 <attribute name="NAME" x="61.976" y="119.38" size="1.778" layer="95" font="vector" rot="R90" align="bottom-center"/>
@@ -2399,36 +2399,36 @@ LRC</text>
 <net name="N$5" class="0">
 <segment>
 <pinref part="Q1" gate="G$1" pin="B"/>
-<pinref part="D1" gate="1" pin="C"/>
 <wire x1="58.42" y1="104.14" x2="50.8" y2="104.14" width="0.1524" layer="91"/>
-<wire x1="50.8" y1="104.14" x2="50.8" y2="111.76" width="0.1524" layer="91"/>
+<pinref part="D1" gate="1" pin="A"/>
+<wire x1="50.8" y1="111.76" x2="50.8" y2="104.14" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="N$6" class="0">
 <segment>
 <pinref part="Q2" gate="G$1" pin="B"/>
-<pinref part="D2" gate="1" pin="C"/>
 <wire x1="38.1" y1="76.2" x2="33.02" y2="76.2" width="0.1524" layer="91"/>
-<wire x1="33.02" y1="76.2" x2="33.02" y2="81.28" width="0.1524" layer="91"/>
+<pinref part="D2" gate="1" pin="A"/>
+<wire x1="33.02" y1="81.28" x2="33.02" y2="76.2" width="0.1524" layer="91"/>
 </segment>
 </net>
 <net name="VCC" class="0">
 <segment>
 <pinref part="R1" gate="G$1" pin="2"/>
-<pinref part="D1" gate="1" pin="A"/>
-<wire x1="63.5" y1="124.46" x2="50.8" y2="124.46" width="0.1524" layer="91"/>
-<wire x1="50.8" y1="124.46" x2="50.8" y2="119.38" width="0.1524" layer="91"/>
 <pinref part="U$1" gate="G$1" pin="VCC"/>
+<wire x1="63.5" y1="124.46" x2="50.8" y2="124.46" width="0.1524" layer="91"/>
 <wire x1="50.8" y1="124.46" x2="25.4" y2="124.46" width="0.1524" layer="91"/>
-<junction x="50.8" y="124.46"/>
 <wire x1="25.4" y1="124.46" x2="25.4" y2="96.52" width="0.1524" layer="91"/>
 <junction x="25.4" y="124.46"/>
 <pinref part="R2" gate="G$1" pin="2"/>
-<pinref part="D2" gate="1" pin="A"/>
 <wire x1="43.18" y1="96.52" x2="33.02" y2="96.52" width="0.1524" layer="91"/>
-<wire x1="33.02" y1="96.52" x2="33.02" y2="88.9" width="0.1524" layer="91"/>
-<wire x1="25.4" y1="96.52" x2="33.02" y2="96.52" width="0.1524" layer="91"/>
+<pinref part="D2" gate="1" pin="C"/>
+<wire x1="33.02" y1="96.52" x2="25.4" y2="96.52" width="0.1524" layer="91"/>
+<wire x1="33.02" y1="88.9" x2="33.02" y2="96.52" width="0.1524" layer="91"/>
 <junction x="33.02" y="96.52"/>
+<pinref part="D1" gate="1" pin="C"/>
+<wire x1="50.8" y1="119.38" x2="50.8" y2="124.46" width="0.1524" layer="91"/>
+<junction x="50.8" y="124.46"/>
 </segment>
 <segment>
 <pinref part="U$2" gate="G$1" pin="VCC"/>
