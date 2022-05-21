@@ -1,45 +1,44 @@
 #include <Arduino.h>
-#include "AudioFileSourceSPIFFS.h"
-#include "AudioFileSourceID3.h"
-#include "AudioGeneratorMP3.h"
-#include "AudioOutputI2S.h"
+#include "musicplayer.h"
 
+MusicPlayer mp;
 
-AudioGeneratorMP3 *mp3;
-AudioFileSourceSPIFFS *file;
-AudioOutputI2S *out;
-AudioFileSourceID3 *id3;
+#define LED1 1 // TX pin, GPIO 1
+#define LED2 4 // D2 pin, GPIO 4
 
-// mp3 is created by
-// $ sox ../other/gravityfalls.wav -c 1 -r 44100 data/gravityfalls-mono.wav
-// $ ffmpeg -i data/gravityfalls-mono.wav data/gravityfalls-mono.mp3
-//
-// Mono and lower bitrate to keep the CPU need down - at 44.1k and
-//   stereo it really wants to cache it (it stutters) but it seems ok at 44.1k
-//   mono. And the original wav is mono anyway.
+#define SENSOR1 16 // D0 pin, GPIO 16
+#define SENSOR2 5 // D1 pin, GPIO 5
 
 void setup()
 {
-  Serial.begin(115200);
   delay(1000);
   SPIFFS.begin();
-  Serial.println("Starting");
+
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+
+  pinMode(SENSOR1, INPUT);
+  pinMode(SENSOR2, INPUT);
+
+  pinMode(A0, INPUT);
   
-  file = new AudioFileSourceSPIFFS("/gravityfalls-mono.mp3");
-  id3 = new AudioFileSourceID3(file);
-  out = new AudioOutputI2S();
-  out->SetGain(0.1);
-  mp3 = new AudioGeneratorMP3();
-  mp3->begin(id3, out);
-  Serial.printf("FreeHeap: %d\n",ESP.getFreeHeap());
+  mp.start();
 }
 
 void loop()
 {
- if (mp3->isRunning()) {
-    if (!mp3->loop()) mp3->stop();
+  digitalWrite(LED1, analogRead(A0) > (1023/2));
+  if (!mp.maint()) {
+    //    digitalWrite(LED1, LOW);
+    digitalWrite(LED2, LOW);
+    bool s1 = digitalRead(SENSOR1);
+    bool s2 = digitalRead(SENSOR2);
+    //    digitalWrite(LED1, s1);
+    digitalWrite(LED2, s2);
+    delay(100);  
   } else {
-    Serial.printf("MP3 done\n");
-    delay(1000);
+    //    digitalWrite(LED1, HIGH);
+    digitalWrite(LED2, HIGH);
   }
+
 }

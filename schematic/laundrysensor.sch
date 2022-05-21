@@ -2256,8 +2256,8 @@ This footprint was designed to help hold the alignment of a through-hole compone
 </class>
 </classes>
 <parts>
-<part name="Q1" library="Transistor" library_urn="urn:adsk.eagle:library:16378713" deviceset="NPN" device="TO92-EBC" package3d_urn="urn:adsk.eagle:package:16378726/2" technology="_" value="2N3904"/>
-<part name="Q2" library="Transistor" library_urn="urn:adsk.eagle:library:16378713" deviceset="NPN" device="TO92-EBC" package3d_urn="urn:adsk.eagle:package:16378726/2" technology="_" value="2N3904"/>
+<part name="Q1" library="Transistor" library_urn="urn:adsk.eagle:library:16378713" deviceset="NPN" device="TO92-EBC" package3d_urn="urn:adsk.eagle:package:16378726/2" technology="_" value="2N4401"/>
+<part name="Q2" library="Transistor" library_urn="urn:adsk.eagle:library:16378713" deviceset="NPN" device="TO92-EBC" package3d_urn="urn:adsk.eagle:package:16378726/2" technology="_" value="2N4401"/>
 <part name="D1" library="opto-trans-siemens" library_urn="urn:adsk.eagle:library:317" deviceset="SFH205" device="" package3d_urn="urn:adsk.eagle:package:21801/1"/>
 <part name="D2" library="opto-trans-siemens" library_urn="urn:adsk.eagle:library:317" deviceset="SFH205" device="" package3d_urn="urn:adsk.eagle:package:21801/1"/>
 <part name="R1" library="SparkFun-Resistors" deviceset="1KOHM" device="-HORIZ-1/4W-5%" value="100k"/>
@@ -2288,7 +2288,7 @@ Gain
 DIN
 BCLK
 LRC</text>
-<text x="88.9" y="22.86" size="1.778" layer="91">Free pins: A0, D5, D6, D7 - if we move D3 to A0, we could use a 23LC1024-ISN as external cache</text>
+<text x="88.9" y="22.86" size="1.778" layer="91">Free pins: D3, D5, D6, D7 - we could use a 23LC1024-ISN as external cache on those</text>
 </plain>
 <instances>
 <instance part="Q1" gate="G$1" x="63.5" y="104.14" smashed="yes">
@@ -2523,14 +2523,6 @@ LRC</text>
 <wire x1="162.56" y1="104.14" x2="162.56" y2="124.46" width="0.1524" layer="91"/>
 </segment>
 </net>
-<net name="N$4" class="0">
-<segment>
-<pinref part="WEMOS1" gate="D1" pin="D3"/>
-<wire x1="165.1" y1="104.14" x2="165.1" y2="114.3" width="0.1524" layer="91"/>
-<pinref part="S1" gate="G$1" pin="S"/>
-<wire x1="165.1" y1="114.3" x2="104.14" y2="114.3" width="0.1524" layer="91"/>
-</segment>
-</net>
 <net name="N$7" class="0">
 <segment>
 <pinref part="J1" gate="G$1" pin="4"/>
@@ -2564,6 +2556,16 @@ LRC</text>
 <wire x1="139.7" y1="109.22" x2="139.7" y2="40.64" width="0.1524" layer="91"/>
 <pinref part="J1" gate="G$1" pin="1"/>
 <wire x1="139.7" y1="40.64" x2="116.84" y2="40.64" width="0.1524" layer="91"/>
+</segment>
+</net>
+<net name="N$4" class="0">
+<segment>
+<pinref part="WEMOS1" gate="D1" pin="A0"/>
+<wire x1="157.48" y1="71.12" x2="157.48" y2="68.58" width="0.1524" layer="91"/>
+<wire x1="157.48" y1="68.58" x2="109.22" y2="68.58" width="0.1524" layer="91"/>
+<wire x1="109.22" y1="68.58" x2="109.22" y2="114.3" width="0.1524" layer="91"/>
+<pinref part="S1" gate="G$1" pin="S"/>
+<wire x1="109.22" y1="114.3" x2="104.14" y2="114.3" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
