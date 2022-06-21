@@ -34,26 +34,31 @@ void MusicPlayer::start()
 
 void MusicPlayer::stop()
 {
-  if (file)
-    delete file;
-  file = NULL;
+  if (mp3) {
+      mp3->stop();
+      delete mp3;
+  }
+  mp3 = NULL;
   if (id3)
     delete id3;
   id3 = NULL;
-  if (mp3)
-    delete mp3;
-  mp3 = NULL;
+  if (file)
+    delete file;
+  file = NULL;
 }
 
 // return true if still playing
 bool MusicPlayer::maint()
 {
- if (mp3->isRunning()) {
-   if (!mp3->loop()) {
-     mp3->stop();
-     return false;
-   }
-   return true;
+  if (!mp3)
+    return false;
+  
+  if (mp3->isRunning()) {
+    if (!mp3->loop()) {
+      mp3->stop();
+      return false;
+    }
+    return true;
   } else {
     return false;
   }
