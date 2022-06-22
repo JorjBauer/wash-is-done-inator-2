@@ -41,7 +41,7 @@ prefs Prefs;
 bool prefsOk = false;
 
 extern "C" homekit_server_config_t config;
-extern "C" homekit_characteristic_t currentAmbientLightLevel;
+extern "C" homekit_characteristic_t leakDetected;
 
 void logmsg(const char *msg)
 {
@@ -267,10 +267,12 @@ void my_homekit_loop()
 {
   arduino_homekit_loop();
   static uint32_t nextReport = 0;
+  static bool ld = false;
   if (millis() > nextReport) {
-    currentAmbientLightLevel.value.float_value += 1.0;
-    homekit_characteristic_notify(&currentAmbientLightLevel, currentAmbientLightLevel.value);
-    nextReport = millis() + 10000; // 10 seconds
+    leakDetected.value.int_value = (ld ? 1 : 0);
+    homekit_characteristic_notify(&leakDetected, leakDetected.value);
+    ld = !ld;
+    nextReport = millis() + 60000; // 60 seconds
   }
 }
 
