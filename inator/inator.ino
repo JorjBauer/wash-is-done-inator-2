@@ -4,12 +4,14 @@
 #include <ArduinoOTA.h>
 #include <ESP8266WebServer.h>
 #include <WiFiServer.h>
+#include <arduino_homekit_server.h>
 
 #include "AudioFileSourceSPIFFS.h"
 #include "lsm.h"
 #include "debounce.h"
 
 bool fsRunning = false;
+bool homekit_initialized = false;
 
 LSM lsm;
 Debounce sensor1, sensor2;
@@ -37,6 +39,9 @@ typedef struct _prefs {
 
 prefs Prefs;
 bool prefsOk = false;
+
+extern "C" homekit_server_config_t config;
+extern "C" homekit_characteristic_t currentAmbientLightLevel;
 
 void logmsg(const char *msg)
 {
@@ -139,6 +144,16 @@ void handleStop()
   server.send(200, "text/html", "Stopping");
 }
 
+void handleDebug()
+{
+  server.send(200, "text/html", "Ok starting up homekit stuff");
+  // This would go in setup I think
+
+  arduino_homekit_setup(&config);
+  homekit_initialized = true;
+  logmsg("started homekit");
+}
+
 void StartSoftAP()
 {
   WiFi.mode(WIFI_AP);
@@ -237,6 +252,7 @@ void setup()
   server.on("/status", handleStatus);
   server.on("/trigger", handleTrigger);
   server.on("/stop", handleStop);
+  server.on("/debug", handleDebug);
   
   server.begin();
   tcpserver.begin();
@@ -247,11 +263,28 @@ bool buttonIsPressed()
   return (analogRead(A0) < (1023/2));
 }
 
+void my_homekit_loop()
+{
+  arduino_homekit_loop();
+  static uint32_t nextReport = 0;
+  if (millis() > nextReport) {
+    currentAmbientLightLevel.value.float_value += 1.0;
+    homekit_characteristic_notify(&currentAmbientLightLevel, currentAmbientLightLevel.value);
+    nextReport = millis() + 10000; // 10 seconds
+  }
+}
+
+
 void loop()
 {
   ArduinoOTA.handle();
-  
   server.handleClient();
+  
+  if (homekit_initialized) {
+    my_homekit_loop();
+    return; // debugging... why can't I pair?
+  } 
+  
 
   if (tcpserver.hasClient()) {
     if (tcpclient.connected()) {
@@ -399,3 +432,4 @@ void processConfig(const char *lhs, const char *rhs)
     lsm.setVolume(Prefs.volume);
   }
 }
+
