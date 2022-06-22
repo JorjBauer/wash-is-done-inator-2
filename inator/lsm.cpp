@@ -9,6 +9,7 @@ MusicPlayer musicPlayer;
 
 LSM::LSM()
 {
+  this->volume = 0.05; // default (as quiet as can be)
   reset();
 }
 
@@ -63,13 +64,28 @@ bool LSM::sensorState(bool isOn)
   if (beforeState && !afterState) {
     // Was on before; but is off now! That's "start alerting"
     logmsg("starting alert\n");
-    musicPlayer.start();
+    musicPlayer.start(volume);
     alertStartedAt = millis();
     ret = true;
   }
 
   musicPlayer.maint();
   return ret;
+}
+
+void LSM::trigger()
+{
+  // for debugging purposes - set up the alerting state and go
+  if (alertStartedAt) {
+    logmsg("stopping previous alert\n");
+    musicPlayer.stop();
+    alertStartedAt = 0;
+  }
+  
+  logmsg("starting manually triggered alert\n");
+  musicPlayer.start(volume);
+  alertStartedAt = millis();
+  
 }
 
 void LSM::buttonPressed()
@@ -87,10 +103,15 @@ void LSM::setTimer(uint32_t ms)
   musicPlayer.stop();
 
   //  musicPlayer.setDelay(ms);
-  musicPlayer.start();
+  musicPlayer.start(volume);
 }
 
 bool LSM::isAlerting()
 {
   return (alertStartedAt ? true : false);
+}
+
+void LSM::setVolume(float v)
+{
+  this->volume = v;
 }

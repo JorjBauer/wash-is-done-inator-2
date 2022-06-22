@@ -23,17 +23,23 @@ class LSM {
 
   void reset();
 
+  void trigger(); // for debugging purposes - set it off right now
+
   bool sensorState(bool isOn);
   void buttonPressed();
   void setTimer(uint32_t ms);
 
   bool isAlerting();
 
+  void setVolume(float volume);
+  
   // private:
   DelayedSensor washerSensor;
   DelayedSensor dryerSensor;
 
   uint32_t alertStartedAt;
+  
+  float volume;
 };
 
 #endif

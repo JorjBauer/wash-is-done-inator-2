@@ -12,7 +12,7 @@ class MusicPlayer {
   MusicPlayer();
   ~MusicPlayer();
 
-  void start();
+  void start(float volume);
   void stop();
   bool maint();
 

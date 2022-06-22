@@ -13,7 +13,6 @@ MusicPlayer::MusicPlayer()
   file = NULL;
   id3 = NULL;
   out = new AudioOutputI2S();
-  out->SetGain(0.05); // debugging -- make 1.0 eventually
   mp3 = NULL;
 }
 
@@ -22,10 +21,13 @@ MusicPlayer::~MusicPlayer()
   stop();
 }
 
-void MusicPlayer::start()
+// Volume 0.05 -> 1.0
+void MusicPlayer::start(float volume)
 {
   stop();
   
+  out->SetGain(volume);
+  out->begin(true); // FIXME: is 'true' correct here?
   file = new AudioFileSourceSPIFFS("/gravityfalls-mono.mp3");
   id3 = new AudioFileSourceID3(file);
   mp3 = new AudioGeneratorMP3();
@@ -34,6 +36,9 @@ void MusicPlayer::start()
 
 void MusicPlayer::stop()
 {
+  if (out) {
+    out->stop();
+  }
   if (mp3) {
       mp3->stop();
       delete mp3;
@@ -55,7 +60,7 @@ bool MusicPlayer::maint()
   
   if (mp3->isRunning()) {
     if (!mp3->loop()) {
-      mp3->stop();
+      stop();
       return false;
     }
     return true;

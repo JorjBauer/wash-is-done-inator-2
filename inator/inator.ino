@@ -32,6 +32,7 @@ typedef struct _prefs {
   uint8_t version;
   char ssid[50];
   char password[50];
+  float volume;
 } prefs;
 
 prefs Prefs;
@@ -40,7 +41,7 @@ bool prefsOk = false;
 void logmsg(const char *msg)
 {
   if (tcpclient.connected()) {
-    tcpclient.print(msg);
+    tcpclient.println(msg);
     tcpclient.flush();
   }
 }
@@ -58,6 +59,8 @@ void handleStatus()
     String(Prefs.ssid) +
     String("</div><div>Password: ") +
     String(Prefs.password) +
+    String("</div><div>Volume: ") +
+    String(Prefs.volume) +
     String("</div></html>");
   server.send(200, "text/html", status.c_str());
 }
@@ -71,11 +74,20 @@ void handleRoot()
               "<li><a href='/config'>/config</a>: change configuration (SSID, password)</li>"
               "<li><a href='/reset'>/reset</a>: reboots the device</li>"
               "<li><a href='/status'>/status</a>: show current status</li>"
+              "<li><a href='/trigger'>/trigger</a>: trigger alert now</li>"
+              "<li><a href='/stop'>/stop</a>: simulate pressing the button to stop alert</li>"
               "</ul>"
               "<p>This also listens on port 9001 for debugging messages.</p>"
               "</html>"
               );
 }
+
+void handleTrigger()
+{
+  lsm.trigger();
+  server.send(200, "text/html", "Okay, triggered");
+}
+
 
 void handleConfig()
 {
@@ -88,8 +100,13 @@ void handleConfig()
            "<input type='text' id='ssid' name='ssid' value='") +
     String(Prefs.ssid) +
     String("'/></div>"
-           "<div><label for='password' id='password' name='password' value='") +
+           "<div><label for='password'>Network Password:</label>"
+           "<input type='password' id='password' name='password' value='") +
     String(Prefs.password) +
+    String("'/></div>"
+           "<div><label for='volume'>Volume (0.0-1.0):</label>"
+           "<input type='number' id='volume' name='volume' step='0.01' value='") +
+    String(Prefs.volume) +
     String("'/></div>"
            "<div><input type='submit' value='Save' /></div>"
            "</body></html");
@@ -101,16 +118,25 @@ void handleSubmit()
 {
   String new_ssid = server.arg("ssid");
   String new_password = server.arg("password");
+  String new_volume = server.arg("volume");
   Prefs.magic = MAGIC;
   Prefs.version = VERSION;
   strncpy(Prefs.ssid, new_ssid.c_str(), sizeof(Prefs.ssid));
   strncpy(Prefs.password, new_password.c_str(), sizeof(Prefs.password));
+  Prefs.volume = atof(new_volume.c_str());
+  lsm.setVolume(Prefs.volume);
   
   writePrefs();
 
   // Redirect to /status to show the changes
   server.sendHeader("Location", String("/status"), true);
   server.send(302, "text/plain", "");
+}
+
+void handleStop()
+{
+  lsm.buttonPressed();
+  server.send(200, "text/html", "Stopping");
 }
 
 void StartSoftAP()
@@ -138,6 +164,12 @@ void setup()
     fsRunning = false;
   }
 
+  // Set some default preferences in case we can't load any prefs...
+  strncpy(Prefs.ssid, "", sizeof(Prefs.ssid));
+  strncpy(Prefs.password, "", sizeof(Prefs.password));
+  Prefs.volume = 0.05; // Default to a low but audible volume
+  lsm.setVolume(Prefs.volume);
+
   if (fsRunning) {
     // Try to load the config file
     fs::File f = SPIFFS.open("/inator.cfg", "r");
@@ -146,8 +178,6 @@ void setup()
       f = SPIFFS.open("/inator.cfg", "w");
       Prefs.magic = MAGIC;
       Prefs.version = VERSION;
-      strncpy(Prefs.ssid, "", sizeof(Prefs.ssid));
-      strncpy(Prefs.password, "", sizeof(Prefs.password));
       f.close();
       f = SPIFFS.open("/inator.cfg", "r");
       if (f) {
@@ -205,6 +235,8 @@ void setup()
   server.on("/submit", handleSubmit);
   server.on("/reset", handleReset);
   server.on("/status", handleStatus);
+  server.on("/trigger", handleTrigger);
+  server.on("/stop", handleStop);
   
   server.begin();
   tcpserver.begin();
@@ -218,8 +250,13 @@ bool buttonIsPressed()
 void loop()
 {
   ArduinoOTA.handle();
+  
   server.handleClient();
+
   if (tcpserver.hasClient()) {
+    if (tcpclient.connected()) {
+      tcpclient.stop(); // only one debugging session at a time please
+    }
     tcpclient = tcpserver.available();
     tcpclient.println("Hello");
     tcpclient.flush();
@@ -245,60 +282,120 @@ void loop()
     return; // abandon this run - do not update lsm's sensor readings
   }
 
-  bool s1 = digitalRead(SENSOR1);
-  sensor1.input(s1);
+  sensor1.input(digitalRead(SENSOR1));
   sensor2.input(digitalRead(SENSOR2));
-  bool sensorState = !sensor1.output();
+  bool sensor1State = sensor1.output();
+  bool sensor2State = sensor2.output();
 
   static bool prevs1;
-  if (s1 != prevs1) {
-    if (s1) {
+  if (sensor1State != prevs1) {
+    if (sensor1State) {
       logmsg("s1 is TRUE\n");
     } else {
       logmsg("s1 is false\n");
     }
-    prevs1 = s1;
+    prevs1 = sensor1State;
   }
-  static bool prevss;
-  if (sensorState != prevss) {
-    if (sensorState) {
-      logmsg("sensorState is TRUE\n");
+  static bool prevs2;
+  if (sensor2State != prevs2) {
+    if (sensor2State) {
+      logmsg("s2 is TRUE\n");
     } else {
-      logmsg("sensorState is false\n");
+      logmsg("s2 is false\n");
     }
-    prevss = sensorState;
+    prevs2 = sensor2State;
   }
 
-  digitalWrite(SENSORLED, sensorState);
-  if (lsm.sensorState(sensorState)) {
+  bool stateForLSM = sensor2State;
+  digitalWrite(SENSORLED, stateForLSM);
+  if (lsm.sensorState(stateForLSM)) {
     // If the state machine changes states... then transmit an update? hmm. No.
   }
-
 }
 
 void writePrefs()
 {
   fs::File f = SPIFFS.open("/inator.cfg", "w");
-  f.write((unsigned char *)(&Prefs), sizeof(Prefs));
+
+  f.println("# Configuration for wash-is-done-inator");
+  f.print("ssid=");
+  f.println(Prefs.ssid);
+  f.print("password=");
+  f.println(Prefs.password);
+  f.print("volume=");
+  f.println(Prefs.volume);
+
   f.close();
 }
 
 bool readPrefs(fs::File f)
 {
-  if (f.size() != sizeof(Prefs)) {
-    return false;
+  bool readingVar = true;
+  int8_t slen = 0;
+  char lhs[50] = {'\0'};
+  char *lp = lhs;
+  char rhs[50] = {'\0'};
+  char *rp = rhs;
+  for(uint8_t i=0; i<f.size(); i++) {
+    char c = f.read();
+    // Simple safety for binary garbage
+    if (c > 126 || (c<32 && c != 10 && c != 13))
+      return false;
+    
+    // Skip commented out and blank lines
+    if (slen == 0 && (c == '#' || c == '\n' || c == '\r')) {
+      continue;
+    }
+
+    if (slen >= 49) {
+      // safety: reset
+      slen = 0;
+      readingVar = true;
+      lhs[0] = rhs[0] = '\0';
+    }
+
+    if (readingVar) {
+      // Keep reading a variable name until we hit an '='
+      if (c == '\n' || c == '\r') {
+        // Abort - got a return before the '='
+        slen = 0;
+        lhs[0] = '\0';
+      }
+      else if (c == '=') {
+        readingVar = false;
+        slen = 0;
+        rhs[0] = '\0';
+      } else {
+        lhs[slen++] = c;
+        lhs[slen] = '\0';
+      }
+    } else {
+      // Keep reading a variable value until we hit a newline
+      if (c == '\n' || c == '\r') {
+        processConfig(lhs,rhs);
+        readingVar = true;
+        slen = 0;
+        lhs[0] = rhs[0] = '\0';
+      } else {
+        rhs[slen++] = c;
+        rhs[slen] = '\0';
+      }
+    }
   }
-
-  unsigned char *ptr = (unsigned char *)(&Prefs);
-  while (f.available()) {
-    *ptr++ = f.read();
-  }
-
-  if (Prefs.magic != MAGIC)
-    return false;
-
-  if (Prefs.version != VERSION)
-    return false;
   
   return true;
+}
+
+void processConfig(const char *lhs, const char *rhs)
+{
+  if (!strcmp(lhs, "ssid")) {
+    strncpy(Prefs.ssid, (char *)rhs, sizeof(Prefs.ssid));
+  }
+  else if (!strcmp(lhs, "password")) {
+    strncpy(Prefs.password, (char *)rhs, sizeof(Prefs.password));
+  }
+  else if (!strcmp(lhs, "volume")) {
+    Prefs.volume = atof(rhs);
+    lsm.setVolume(Prefs.volume);
+  }
 }
