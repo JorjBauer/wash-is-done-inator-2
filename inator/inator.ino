@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <WString.h>
 
 #include <ESP8266WiFi.h>
 #include <ArduinoOTA.h>
@@ -9,6 +10,9 @@
 #include "AudioFileSourceSPIFFS.h"
 #include "lsm.h"
 #include "debounce.h"
+
+#include "musicplayer.h"
+MusicPlayer musicPlayer;
 
 bool fsRunning = false;
 bool homekit_initialized = false;
@@ -26,12 +30,7 @@ ESP8266WebServer server(80); //HTTP server on port 80
 WiFiServer tcpserver(9001); // tcp server
 WiFiClient tcpclient;
 
-#define MAGIC 0x06212022
-#define VERSION 1
-
 typedef struct _prefs {
-  uint32_t magic;
-  uint8_t version;
   char ssid[50];
   char password[50];
   float volume;
@@ -46,6 +45,11 @@ typedef struct _prefs {
 
 prefs Prefs;
 bool prefsOk = false;
+
+static const char texthtml[] PROGMEM = "text/html";
+static const char textplain[] PROGMEM = "text/plain";
+static const char ftrue[] PROGMEM = "true";
+static const char ffalse[] PROGMEM = "false";
 
 extern "C" homekit_server_config_t config;
 extern "C" homekit_characteristic_t sensorState;
@@ -62,99 +66,117 @@ void logmsg(const char *msg)
   }
 }
 
+void handleLs()
+{
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  File root = SPIFFS.open("/", "r");
+
+  Dir dir = SPIFFS.openDir("/");
+  server.send(200, FPSTR(texthtml), F("<html><ul>"));
+  while (dir.next()) {
+    server.sendContent(F("<li>"));
+    server.sendContent(dir.fileName());
+    server.sendContent(F("</li>"));
+  }
+  server.sendContent(F("</ul></html>"));
+}
+
+
 void handleReset()
 {
-  server.send(200, "text/html", "Okay, restarting");
+  server.send(200, FPSTR(texthtml), F("Okay, restarting"));
 
   ESP.restart();
 }
 
 void handleStatus()
 {
-  String status = String("<html><div>Uptime (millis): ") +
+  String status = String(F("<html><div>Uptime (millis): ")) +
     String(millis()) +
-    String("</div><div>Free heap: ") +
+    String(F("</div><div>Free heap: ")) +
     String(ESP.getFreeHeap()) +
-    String("</div><div>SSID: ") +
+    String(F("</div><div>SSID: ")) +
     String(Prefs.ssid) +
-    String("</div><div>Password: ") +
+    String(F("</div><div>Password: ")) +
     String(Prefs.password) +
-    String("</div><div>Volume: ") +
+    String(F("</div><div>Volume: ")) +
     String(Prefs.volume) +
-    String("</div><div>State: ") +
-    String(Prefs.currentState ? "true" : "false") +
-    String("</div><div>Fault: ") +
-    String(Prefs.currentFault ? "true" : "false") +
-    String("</div><div>Active: ") +
-    String(Prefs.currentActive ? "true" : "false") +
-    String("</div><div>Tampered: ") +
-    String(Prefs.currentTampered ? "true" : "false") +
-    String("</div><div>LowBattery: ") +
-    String(Prefs.currentLowBattery ? "true" : "false") +
-    String("</div><div>LSM is alerting: ") +
-    String(lsm.isAlerting() ? "true" : "false") +
-    String("</div></html>");
-  server.send(200, "text/html", status.c_str());
+    String(F("</div><div>State: ")) +
+    String(Prefs.currentState ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>Fault: ")) +
+    String(Prefs.currentFault ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>Active: ")) +
+    String(Prefs.currentActive ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>Tampered: ")) +
+    String(Prefs.currentTampered ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>LowBattery: ")) +
+    String(Prefs.currentLowBattery ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>LSM is alerting: ")) +
+    String(lsm.isAlerting() ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>is playing: ")) +
+    String(musicPlayer.isPlaying() ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div></html>"));
+  server.send(200, FPSTR(texthtml), status.c_str());
 }
 
 void handleRoot()
 {
-  server.send(200, "text/html",
-              "<!DOCTYPE html><html>"
-              "<h1>Hola</h1>"
-              "<p>Page list:</p><ul>"
-              "<li><a href='/config'>/config</a>: change configuration (SSID, password)</li>"
-              "<li><a href='/reset'>/reset</a>: reboots the device</li>"
-              "<li><a href='/status'>/status</a>: show current status</li>"
-              "<li><a href='/trigger'>/trigger</a>: trigger alert now</li>"
-              "<li><a href='/stop'>/stop</a>: simulate pressing the button to stop alert</li>"
-              "</ul>"
-              "<p>This also listens on port 9001 for debugging messages.</p>"
-              "</html>"
+  server.send(200, FPSTR(texthtml),
+              F("<!DOCTYPE html><html>"
+                "<h1>Hola</h1>"
+                "<p>Page list:</p><ul>"
+                "<li><a href='/config'>/config</a>: change configuration (SSID, password)</li>"
+                "<li><a href='/reset'>/reset</a>: reboots the device</li>"
+                "<li><a href='/status'>/status</a>: show current status</li>"
+                "<li><a href='/trigger'>/trigger</a>: trigger alert now</li>"
+                "<li><a href='/stop'>/stop</a>: simulate pressing the button to stop alert</li>"
+                "<li><a href='/ls'>/ls</a>: see what's on the SPIFFS</li>"
+                "</ul>"
+                "<p>This also listens on port 9001 for debugging messages.</p>"
+                "</html>")
               );
 }
 
 void handleTrigger()
 {
-  lsm.trigger();
-  server.send(200, "text/html", "Okay, triggered");
+  server.send(200, FPSTR(texthtml), F("Okay, triggered"));
+  musicPlayer.start(Prefs.volume);
 }
-
 
 void handleConfig()
 {
   String html =
-    String("<!DOCTYPE html><html>"
-           "<head></head>"
-           "<body>"
-           "<form action='/submit' method='post'>"
-           "<div><label for='ssid'>Connect to SSID:</label>"
-           "<input type='text' id='ssid' name='ssid' value='") +
+    String(F("<!DOCTYPE html><html>"
+             "<head></head>"
+             "<body>"
+             "<form action='/submit' method='post'>"
+             "<div><label for='ssid'>Connect to SSID:</label>"
+             "<input type='text' id='ssid' name='ssid' value='")) +
     String(Prefs.ssid) +
-    String("'/></div>"
-           "<div><label for='password'>Network Password:</label>"
-           "<input type='password' id='password' name='password' value='") +
+    String(F("'/></div>"
+             "<div><label for='password'>Network Password:</label>"
+             "<input type='password' id='password' name='password' value='")) +
     String(Prefs.password) +
-    String("'/></div>"
-           "<div><label for='volume'>Volume (0.0-1.0):</label>"
-           "<input type='number' id='volume' name='volume' step='0.01' value='") +
+    String(F("'/></div>"
+             "<div><label for='volume'>Volume (0.0-1.0):</label>"
+             "<input type='number' id='volume' name='volume' step='0.01' value='")) +
     String(Prefs.volume) +
-    String("'/></div>"
-           // DEBUG: dump of settings for HomeKit testing
-           "<div><label for='currentState'>currentState:</label>"
-            "<input type='checkbox' name='currentState' value='currentState'/></div>"
-           "<div><label for='currentFault'>currentFault:</label>"
-            "<input type='checkbox' name='currentFault' value='currentFault'/></div>"
-           "<div><label for='currentActive'>currentActive:</label>"
-            "<input type='checkbox' name='currentActive' value='currentActive'/></div>"
-           "<div><label for='currentTampered'>currentTampered:</label>"
-            "<input type='checkbox' name='currentTampered' value='currentTampered'/></div>"
-           "<div><label for='currentLowBattery'>currentLowBattery:</label>"
-            "<input type='checkbox' name='currentLowBattery' value='currentLowBattery'/></div>"
-           // END DEBUG
-           "<div><input type='submit' value='Save' /></div>"
-           "</body></html");
-  server.send(200, "text/html",
+    String(F("'/></div>"
+             // DEBUG: dump of settings for HomeKit testing
+             "<div><label for='currentState'>currentState:</label>"
+             "<input type='checkbox' name='currentState' value='currentState'/></div>"
+             "<div><label for='currentFault'>currentFault:</label>"
+             "<input type='checkbox' name='currentFault' value='currentFault'/></div>"
+             "<div><label for='currentActive'>currentActive:</label>"
+             "<input type='checkbox' name='currentActive' value='currentActive'/></div>"
+             "<div><label for='currentTampered'>currentTampered:</label>"
+             "<input type='checkbox' name='currentTampered' value='currentTampered'/></div>"
+             "<div><label for='currentLowBattery'>currentLowBattery:</label>"
+             "<input type='checkbox' name='currentLowBattery' value='currentLowBattery'/></div>"
+             // END DEBUG
+             "<div><input type='submit' value='Save' /></div>"
+             "</body></html"));
+  server.send(200, FPSTR(texthtml),
               html.c_str());
 }
 
@@ -163,8 +185,6 @@ void handleSubmit()
   String new_ssid = server.arg("ssid");
   String new_password = server.arg("password");
   String new_volume = server.arg("volume");
-  Prefs.magic = MAGIC;
-  Prefs.version = VERSION;
   strncpy(Prefs.ssid, new_ssid.c_str(), sizeof(Prefs.ssid));
   strncpy(Prefs.password, new_password.c_str(), sizeof(Prefs.password));
   Prefs.volume = atof(new_volume.c_str());
@@ -179,19 +199,19 @@ void handleSubmit()
   writePrefs();
 
   // Redirect to /status to show the changes
-  server.sendHeader("Location", String("/status"), true);
-  server.send(302, "text/plain", "");
+  server.sendHeader(F("Location"), String("/status"), true);
+  server.send(302, FPSTR(textplain), "");
 }
 
 void handleStop()
 {
   lsm.buttonPressed();
-  server.send(200, "text/html", "Stopping");
+  server.send(200, FPSTR(texthtml), F("Stopping"));
 }
 
 void handleDebug()
 {
-  server.send(200, "text/html", "Ok starting up homekit stuff");
+  server.send(200, FPSTR(texthtml), F("Ok starting up homekit stuff"));
   // This would go in setup I think
 
   arduino_homekit_setup(&config);
@@ -237,10 +257,7 @@ void setup()
     fs::File f = SPIFFS.open("/inator.cfg", "r");
     if (!f) {
       // No config file found; create a set of defaults and save it
-      f = SPIFFS.open("/inator.cfg", "w");
-      Prefs.magic = MAGIC;
-      Prefs.version = VERSION;
-      f.close();
+      writePrefs();
       f = SPIFFS.open("/inator.cfg", "r");
       if (f) {
         fsRunning = true;
@@ -300,6 +317,7 @@ void setup()
   server.on("/trigger", handleTrigger);
   server.on("/stop", handleStop);
   server.on("/debug", handleDebug);
+  server.on("/ls", handleLs);
   
   server.begin();
   tcpserver.begin();
@@ -351,9 +369,13 @@ void loop()
   // Track the alerting state with the alert LED
   if (lsm.isAlerting()) {
     digitalWrite(ALERTLED, HIGH);
+    Prefs.currentState = true; // in the next poll loop, we'll update HomeKit
   } else {
     digitalWrite(ALERTLED, LOW);
+    Prefs.currentState = false;
   }
+
+  musicPlayer.maint();
 
   // If we're delaying before re-alterting or playing the tune, and
   // the button's pressed, then abort; that's confirmation that alert
