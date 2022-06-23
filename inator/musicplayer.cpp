@@ -10,15 +10,31 @@
 
 MusicPlayer::MusicPlayer()
 {
-  file = NULL;
-  id3 = NULL;
+  file = new AudioFileSourceSPIFFS("/gravityfalls-mono.mp3");
+  id3 = new AudioFileSourceID3(file);
+  mp3 = new AudioGeneratorMP3();
   out = new AudioOutputI2S();
-  mp3 = NULL;
 }
 
 MusicPlayer::~MusicPlayer()
 {
   stop();
+  if (out) {
+    out->stop();
+    delete out;
+    out = NULL;
+  }
+  if (mp3) {
+      mp3->stop();
+      delete mp3;
+      mp3 = NULL;
+  }
+  if (id3)
+    delete id3;
+  id3 = NULL;
+  if (file)
+    delete file;
+  file = NULL;
 }
 
 // Volume 0.05 -> 1.0
@@ -27,10 +43,7 @@ void MusicPlayer::start(float volume)
   stop();
   
   out->SetGain(volume);
-  out->begin(true); // FIXME: is 'true' correct here?
-  file = new AudioFileSourceSPIFFS("/gravityfalls-mono.mp3");
-  id3 = new AudioFileSourceID3(file);
-  mp3 = new AudioGeneratorMP3();
+  out->begin(true);
   mp3->begin(id3, out);
 }
 
@@ -41,15 +54,7 @@ void MusicPlayer::stop()
   }
   if (mp3) {
       mp3->stop();
-      delete mp3;
   }
-  mp3 = NULL;
-  if (id3)
-    delete id3;
-  id3 = NULL;
-  if (file)
-    delete file;
-  file = NULL;
 }
 
 // return true if still playing

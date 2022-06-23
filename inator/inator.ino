@@ -35,13 +35,24 @@ typedef struct _prefs {
   char ssid[50];
   char password[50];
   float volume;
+
+  // status, not really prefs... FIXME
+  bool currentState;
+  bool currentFault;
+  bool currentActive;
+  bool currentTampered;
+  bool currentLowBattery;
 } prefs;
 
 prefs Prefs;
 bool prefsOk = false;
 
 extern "C" homekit_server_config_t config;
-extern "C" homekit_characteristic_t leakDetected;
+extern "C" homekit_characteristic_t sensorState;
+//extern "C" homekit_characteristic_t statusFault;
+//extern "C" homekit_characteristic_t statusActive;
+//extern "C" homekit_characteristic_t statusTampered;
+//extern "C" homekit_characteristic_t statusLowBattery;
 
 void logmsg(const char *msg)
 {
@@ -60,12 +71,28 @@ void handleReset()
 
 void handleStatus()
 {
-  String status = String("<html><div>SSID: ") +
+  String status = String("<html><div>Uptime (millis): ") +
+    String(millis()) +
+    String("</div><div>Free heap: ") +
+    String(ESP.getFreeHeap()) +
+    String("</div><div>SSID: ") +
     String(Prefs.ssid) +
     String("</div><div>Password: ") +
     String(Prefs.password) +
     String("</div><div>Volume: ") +
     String(Prefs.volume) +
+    String("</div><div>State: ") +
+    String(Prefs.currentState ? "true" : "false") +
+    String("</div><div>Fault: ") +
+    String(Prefs.currentFault ? "true" : "false") +
+    String("</div><div>Active: ") +
+    String(Prefs.currentActive ? "true" : "false") +
+    String("</div><div>Tampered: ") +
+    String(Prefs.currentTampered ? "true" : "false") +
+    String("</div><div>LowBattery: ") +
+    String(Prefs.currentLowBattery ? "true" : "false") +
+    String("</div><div>LSM is alerting: ") +
+    String(lsm.isAlerting() ? "true" : "false") +
     String("</div></html>");
   server.send(200, "text/html", status.c_str());
 }
@@ -113,6 +140,18 @@ void handleConfig()
            "<input type='number' id='volume' name='volume' step='0.01' value='") +
     String(Prefs.volume) +
     String("'/></div>"
+           // DEBUG: dump of settings for HomeKit testing
+           "<div><label for='currentState'>currentState:</label>"
+            "<input type='checkbox' name='currentState' value='currentState'/></div>"
+           "<div><label for='currentFault'>currentFault:</label>"
+            "<input type='checkbox' name='currentFault' value='currentFault'/></div>"
+           "<div><label for='currentActive'>currentActive:</label>"
+            "<input type='checkbox' name='currentActive' value='currentActive'/></div>"
+           "<div><label for='currentTampered'>currentTampered:</label>"
+            "<input type='checkbox' name='currentTampered' value='currentTampered'/></div>"
+           "<div><label for='currentLowBattery'>currentLowBattery:</label>"
+            "<input type='checkbox' name='currentLowBattery' value='currentLowBattery'/></div>"
+           // END DEBUG
            "<div><input type='submit' value='Save' /></div>"
            "</body></html");
   server.send(200, "text/html",
@@ -130,6 +169,12 @@ void handleSubmit()
   strncpy(Prefs.password, new_password.c_str(), sizeof(Prefs.password));
   Prefs.volume = atof(new_volume.c_str());
   lsm.setVolume(Prefs.volume);
+  
+  Prefs.currentState = server.arg("currentState").isEmpty() ? 0 : 1;
+  Prefs.currentFault = server.arg("currentFault").isEmpty() ? 0 : 1;
+  Prefs.currentActive = server.arg("currentActive").isEmpty() ? 0 : 1;
+  Prefs.currentTampered = server.arg("currentTampered").isEmpty() ? 0 : 1;
+  Prefs.currentLowBattery = server.arg("currentLowBattery").isEmpty() ? 0 : 1;
   
   writePrefs();
 
@@ -185,6 +230,8 @@ void setup()
   Prefs.volume = 0.05; // Default to a low but audible volume
   lsm.setVolume(Prefs.volume);
 
+  Prefs.currentState = Prefs.currentFault = Prefs.currentActive = Prefs.currentTampered = Prefs.currentLowBattery = false;
+  
   if (fsRunning) {
     // Try to load the config file
     fs::File f = SPIFFS.open("/inator.cfg", "r");
@@ -267,12 +314,18 @@ void my_homekit_loop()
 {
   arduino_homekit_loop();
   static uint32_t nextReport = 0;
-  static bool ld = false;
   if (millis() > nextReport) {
-    leakDetected.value.int_value = (ld ? 1 : 0);
-    homekit_characteristic_notify(&leakDetected, leakDetected.value);
-    ld = !ld;
-    nextReport = millis() + 60000; // 60 seconds
+    sensorState.value.int_value = Prefs.currentState ? 1 : 0;
+    //    statusFault.value.int_value = Prefs.currentFault ? 1 : 0;
+    //    statusActive.value.int_value = Prefs.currentActive ? 1 : 0;
+    //    statusTampered.value.int_value = Prefs.currentTampered ? 1 : 0;
+    //    statusLowBattery.value.int_value = Prefs.currentLowBattery ? 1 : 0;
+    homekit_characteristic_notify(&sensorState, sensorState.value);
+    //    homekit_characteristic_notify(&statusFault, statusFault.value);
+    //    homekit_characteristic_notify(&statusActive, statusActive.value);
+    //    homekit_characteristic_notify(&statusTampered, statusTampered.value);
+    //    homekit_characteristic_notify(&statusLowBattery, statusLowBattery.value);
+    nextReport = millis() + 10000; // 10 seconds
   }
 }
 
@@ -284,9 +337,7 @@ void loop()
   
   if (homekit_initialized) {
     my_homekit_loop();
-    return; // debugging... why can't I pair?
   } 
-  
 
   if (tcpserver.hasClient()) {
     if (tcpclient.connected()) {
