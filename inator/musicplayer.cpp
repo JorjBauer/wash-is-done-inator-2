@@ -10,66 +10,57 @@
 
 MusicPlayer::MusicPlayer()
 {
-  file = new AudioFileSourceSPIFFS("/gravityfalls-mono.mp3");
-  id3 = new AudioFileSourceID3(file);
-  mp3 = new AudioGeneratorMP3();
-  out = new AudioOutputI2S();
+  file = NULL;
+  mp3 = NULL;
+  out = NULL;
 }
 
 MusicPlayer::~MusicPlayer()
 {
   stop();
-  if (out) {
-    out->stop();
-    delete out;
-    out = NULL;
-  }
-  if (mp3) {
-      mp3->stop();
-      delete mp3;
-      mp3 = NULL;
-  }
-  if (id3)
-    delete id3;
-  id3 = NULL;
-  if (file)
-    delete file;
-  file = NULL;
 }
 
 // Volume 0.05 -> 1.0
 void MusicPlayer::start(float volume)
 {
   stop();
-  
+  file = new AudioFileSourceSPIFFS("/gravityfalls-mono.mp3");
+  out = new AudioOutputI2S();
   out->SetGain(volume);
-  out->begin(true);
-  mp3->begin(id3, out);
+  mp3 = new AudioGeneratorMP3();
+  mp3->begin(file, out);
 }
 
 void MusicPlayer::stop()
 {
-  if (out) {
-    out->stop();
-  }
   if (mp3) {
-      mp3->stop();
+      delete mp3;
+      mp3 = NULL;
   }
+  if (out) {
+    delete out;
+    out = NULL;
+  }
+  if (file) {
+    delete file;
+    file = NULL;
+  }
+}
+
+bool MusicPlayer::isPlaying()
+{
+  return (mp3 && out && file && mp3->isRunning());
 }
 
 // return true if still playing
 bool MusicPlayer::maint()
 {
-  if (!mp3)
+  if (!mp3 || !out || !file)
     return false;
-  
-  if (mp3->isRunning()) {
-    if (!mp3->loop()) {
-      stop();
-      return false;
-    }
-    return true;
-  } else {
+  if (!mp3->loop()) {
+    stop();
     return false;
   }
+  
+  return true;
 }

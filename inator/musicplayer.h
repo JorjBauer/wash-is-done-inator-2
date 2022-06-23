@@ -3,7 +3,6 @@
 
 #include <Arduino.h>
 #include "AudioFileSourceSPIFFS.h"
-#include "AudioFileSourceID3.h"
 #include "AudioGeneratorMP3.h"
 #include "AudioOutputI2S.h"
 
@@ -16,11 +15,12 @@ class MusicPlayer {
   void stop();
   bool maint();
 
+  bool isPlaying();
+
  private:
   AudioGeneratorMP3 *mp3;
   AudioFileSourceSPIFFS *file;
   AudioOutputI2S *out;
-  AudioFileSourceID3 *id3;
 };
 
 #endif
