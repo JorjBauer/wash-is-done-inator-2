@@ -23,8 +23,6 @@ class LSM {
 
   void reset();
 
-  void trigger(); // for debugging purposes - set it off right now
-
   bool sensorState(bool isOn);
   void buttonPressed();
   void setTimer(uint32_t ms);
