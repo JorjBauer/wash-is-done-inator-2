@@ -166,6 +166,8 @@ void handleTrigger()
 
 void handleConfig()
 {
+  SendHeader();
+  
   String html =
     String(F("<form action='/submit' method='post'>"
              "<div><label for='ssid'>Connect to SSID:</label>"
@@ -197,11 +199,9 @@ void handleConfig()
              "<input type='checkbox' name='currentLowBattery' value='currentLowBattery'/></div>"
              // END DEBUG
              "<div><input type='submit' value='Save' /></div>"));
-  server.send(200, FPSTR(texthtml),
-              html.c_str());
 
-  SendHeader();
   server.sendContent(html);
+  
   SendFooter();
 }
 
