@@ -195,7 +195,7 @@ void handleConfig()
              "<div><label for='homeKitEnabled'>homeKitEnabled:</label>"
              "<input type='checkbox' name='homeKitEnabled' value='homeKitEnabled' ")) +
     String(Prefs.homeKitEnabled ? "checked" : "") +
-    String(F("'/></div>"
+    String(F("/></div>"
              // DEBUG: dump of settings for HomeKit testing
              "<div><label for='currentState'>currentState:</label>"
              "<input type='checkbox' name='currentState' value='currentState'/></div>"
