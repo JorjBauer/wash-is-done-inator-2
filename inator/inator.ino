@@ -34,6 +34,7 @@ typedef struct _prefs {
   char ssid[50];
   char password[50];
   float volume;
+  bool homeKitEnabled;
 
   // status, not really prefs... FIXME
   bool currentState;
@@ -101,6 +102,8 @@ void handleStatus()
     String(Prefs.password) +
     String(F("</div><div>Volume: ")) +
     String(Prefs.volume) +
+    String(F("</div><div>homeKit enabled: ")) +
+    String(Prefs.homeKitEnabled ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F("</div><div>State: ")) +
     String(Prefs.currentState ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F("</div><div>Fault: ")) +
@@ -115,6 +118,10 @@ void handleStatus()
     String(lsm.isAlerting() ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F("</div><div>is playing: ")) +
     String(musicPlayer.isPlaying() ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>sensor1: ")) +
+    String(sensor1.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
+    String(F("</div><div>sensor2: ")) +
+    String(sensor2.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F("</div></html>"));
   server.send(200, FPSTR(texthtml), status.c_str());
 }
@@ -140,7 +147,7 @@ void handleRoot()
 void handleTrigger()
 {
   server.send(200, FPSTR(texthtml), F("Okay, triggered"));
-  musicPlayer.start(Prefs.volume);
+  lsm.debugTrigger();
 }
 
 void handleConfig()
@@ -161,6 +168,10 @@ void handleConfig()
              "<div><label for='volume'>Volume (0.0-1.0):</label>"
              "<input type='number' id='volume' name='volume' step='0.01' value='")) +
     String(Prefs.volume) +
+    String(F("'/></div>"
+             "<div><label for='homeKitEnabled'>homeKitEnabled:</label>"
+             "<input type='checkbox' name='homeKitEnabled' value='homeKitEnabled' ")) +
+    String(Prefs.homeKitEnabled ? "checked" : "") +
     String(F("'/></div>"
              // DEBUG: dump of settings for HomeKit testing
              "<div><label for='currentState'>currentState:</label>"
@@ -189,6 +200,14 @@ void handleSubmit()
   strncpy(Prefs.password, new_password.c_str(), sizeof(Prefs.password));
   Prefs.volume = atof(new_volume.c_str());
   lsm.setVolume(Prefs.volume);
+
+  Prefs.homeKitEnabled = server.arg("homeKitEnabled").isEmpty() ? 0 : 1;
+  // Start homekit if needed. Stopping it is messier - we just stop sending data,
+  // but on reboot we'd not even register.
+  if (Prefs.homeKitEnabled && !homekit_initialized) {
+    arduino_homekit_setup(&config);
+    homekit_initialized = true;
+  }
   
   Prefs.currentState = server.arg("currentState").isEmpty() ? 0 : 1;
   Prefs.currentFault = server.arg("currentFault").isEmpty() ? 0 : 1;
@@ -206,17 +225,14 @@ void handleSubmit()
 void handleStop()
 {
   lsm.buttonPressed();
+  musicPlayer.stop();
   server.send(200, FPSTR(texthtml), F("Stopping"));
 }
 
 void handleDebug()
 {
-  server.send(200, FPSTR(texthtml), F("Ok starting up homekit stuff"));
-  // This would go in setup I think
-
-  arduino_homekit_setup(&config);
-  homekit_initialized = true;
-  logmsg("started homekit");
+  server.send(200, FPSTR(texthtml), F("Debug hook confirmed - starting music playing"));
+  musicPlayer.start(Prefs.volume);
 }
 
 void StartSoftAP()
@@ -244,6 +260,22 @@ void setup()
     fsRunning = false;
   }
 
+  // Turn TX/RX in to GPIO1 and GPIO 3
+  pinMode(1, FUNCTION_3);
+  pinMode(3, FUNCTION_3);
+
+  pinMode(ALERTLED, OUTPUT);
+  pinMode(SENSORLED, OUTPUT);
+
+  pinMode(SENSOR1, INPUT);
+  pinMode(SENSOR2, INPUT);
+
+  pinMode(A0, INPUT);
+
+  // Use alert/sensor LEDs to show startup sequence progress
+  digitalWrite(ALERTLED, LOW);
+  digitalWrite(SENSORLED, LOW);
+  
   // Set some default preferences in case we can't load any prefs...
   strncpy(Prefs.ssid, "", sizeof(Prefs.ssid));
   strncpy(Prefs.password, "", sizeof(Prefs.password));
@@ -270,18 +302,10 @@ void setup()
     }
   }
 
-  // Turn TX/RX in to GPIO1 and GPIO 3
-  pinMode(1, FUNCTION_3);
-  pinMode(3, FUNCTION_3);
 
-  pinMode(ALERTLED, OUTPUT);
-  pinMode(SENSORLED, OUTPUT);
-
-  pinMode(SENSOR1, INPUT);
-  pinMode(SENSOR2, INPUT);
-
-  pinMode(A0, INPUT);
-
+  digitalWrite(ALERTLED, HIGH);
+  digitalWrite(SENSORLED, LOW);
+  
   if (!prefsOk ||
       (prefsOk && !strlen(Prefs.ssid))) {
     StartSoftAP();
@@ -294,17 +318,21 @@ void setup()
       delay(5000);
     }
     if (count >= 10) {
+      // Failed to connect to wifi. Blink LEDs and then start up a new wifi.
       while (count--) {
         digitalWrite(ALERTLED, HIGH);
         digitalWrite(SENSORLED, LOW);
-        delay(1000);
+        delay(100);
         digitalWrite(ALERTLED, LOW);
         digitalWrite(SENSORLED, HIGH);
-        delay(1000);
+        delay(100);
       }
       StartSoftAP();
     }
   }
+  
+  digitalWrite(ALERTLED, HIGH);
+  digitalWrite(SENSORLED, HIGH);
   
   ArduinoOTA.setHostname("doneinator");
   ArduinoOTA.begin();
@@ -321,6 +349,14 @@ void setup()
   
   server.begin();
   tcpserver.begin();
+
+  if (Prefs.homeKitEnabled) {
+    arduino_homekit_setup(&config);
+    homekit_initialized = true;
+  }
+  
+  digitalWrite(ALERTLED, LOW);
+  digitalWrite(SENSORLED, LOW);
 }
 
 bool buttonIsPressed()
@@ -330,20 +366,22 @@ bool buttonIsPressed()
 
 void my_homekit_loop()
 {
-  arduino_homekit_loop();
-  static uint32_t nextReport = 0;
-  if (millis() > nextReport) {
-    sensorState.value.int_value = Prefs.currentState ? 1 : 0;
-    //    statusFault.value.int_value = Prefs.currentFault ? 1 : 0;
-    //    statusActive.value.int_value = Prefs.currentActive ? 1 : 0;
-    //    statusTampered.value.int_value = Prefs.currentTampered ? 1 : 0;
-    //    statusLowBattery.value.int_value = Prefs.currentLowBattery ? 1 : 0;
-    homekit_characteristic_notify(&sensorState, sensorState.value);
-    //    homekit_characteristic_notify(&statusFault, statusFault.value);
-    //    homekit_characteristic_notify(&statusActive, statusActive.value);
-    //    homekit_characteristic_notify(&statusTampered, statusTampered.value);
-    //    homekit_characteristic_notify(&statusLowBattery, statusLowBattery.value);
-    nextReport = millis() + 10000; // 10 seconds
+  if (Prefs.homeKitEnabled) {
+    arduino_homekit_loop();
+    static uint32_t nextReport = 0;
+    if (millis() > nextReport) {
+      sensorState.value.int_value = Prefs.currentState ? 1 : 0;
+      //    statusFault.value.int_value = Prefs.currentFault ? 1 : 0;
+      //    statusActive.value.int_value = Prefs.currentActive ? 1 : 0;
+      //    statusTampered.value.int_value = Prefs.currentTampered ? 1 : 0;
+      //    statusLowBattery.value.int_value = Prefs.currentLowBattery ? 1 : 0;
+      homekit_characteristic_notify(&sensorState, sensorState.value);
+      //    homekit_characteristic_notify(&statusFault, statusFault.value);
+      //    homekit_characteristic_notify(&statusActive, statusActive.value);
+      //    homekit_characteristic_notify(&statusTampered, statusTampered.value);
+      //    homekit_characteristic_notify(&statusLowBattery, statusLowBattery.value);
+      nextReport = millis() + 10000; // 10 seconds
+    }
   }
 }
 
@@ -353,7 +391,7 @@ void loop()
   ArduinoOTA.handle();
   server.handleClient();
   
-  if (homekit_initialized) {
+  if (homekit_initialized && Prefs.homeKitEnabled) {
     my_homekit_loop();
   } 
 
@@ -374,7 +412,7 @@ void loop()
     digitalWrite(ALERTLED, LOW);
     Prefs.currentState = false;
   }
-
+  
   musicPlayer.maint();
 
   // If we're delaying before re-alterting or playing the tune, and
@@ -432,6 +470,8 @@ void writePrefs()
   f.println(Prefs.password);
   f.print("volume=");
   f.println(Prefs.volume);
+  f.print("homeKitEnabled=");
+  f.println(Prefs.homeKitEnabled ? "1" : "0");
 
   f.close();
 }
@@ -505,6 +545,9 @@ void processConfig(const char *lhs, const char *rhs)
   else if (!strcmp(lhs, "volume")) {
     Prefs.volume = atof(rhs);
     lsm.setVolume(Prefs.volume);
+  }
+  else if (!strcmp(lhs, "homeKitEnabled")) {
+    Prefs.homeKitEnabled = atoi(rhs) ? true : false;
   }
 }
 

@@ -11,7 +11,7 @@
 MusicPlayer::MusicPlayer()
 {
   file = NULL;
-  mp3 = NULL;
+  wav = NULL;
   out = NULL;
 }
 
@@ -24,18 +24,18 @@ MusicPlayer::~MusicPlayer()
 void MusicPlayer::start(float volume)
 {
   stop();
-  file = new AudioFileSourceSPIFFS("/gravityfalls-mono.mp3");
+  file = new AudioFileSourceSPIFFS("/gravityfalls-mono.wav");
   out = new AudioOutputI2S();
   out->SetGain(volume);
-  mp3 = new AudioGeneratorMP3();
-  mp3->begin(file, out);
+  wav = new AudioGeneratorWAV();
+  wav->begin(file, out);
 }
 
 void MusicPlayer::stop()
 {
-  if (mp3) {
-      delete mp3;
-      mp3 = NULL;
+  if (wav) {
+      delete wav;
+      wav = NULL;
   }
   if (out) {
     delete out;
@@ -49,15 +49,15 @@ void MusicPlayer::stop()
 
 bool MusicPlayer::isPlaying()
 {
-  return (mp3 && out && file && mp3->isRunning());
+  return (wav && out && file && wav->isRunning());
 }
 
 // return true if still playing
 bool MusicPlayer::maint()
 {
-  if (!mp3 || !out || !file)
+  if (!wav || !out || !file)
     return false;
-  if (!mp3->loop()) {
+  if (!wav->loop()) {
     stop();
     return false;
   }

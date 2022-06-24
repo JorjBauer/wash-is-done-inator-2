@@ -30,6 +30,8 @@ class LSM {
   bool isAlerting();
 
   void setVolume(float volume);
+
+  void debugTrigger();
   
   // private:
   DelayedSensor washerSensor;

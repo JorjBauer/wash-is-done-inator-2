@@ -99,3 +99,12 @@ void LSM::setVolume(float v)
 {
   this->volume = v;
 }
+
+void LSM::debugTrigger()
+{
+  // Fake a trigger for debugging purposes
+  logmsg("debugTrigger starting alert state\n");
+  musicPlayer.stop();
+  musicPlayer.start(volume);
+  alertStartedAt = millis();
+}
