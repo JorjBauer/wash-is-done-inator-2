@@ -105,7 +105,17 @@ void handleLs()
   SendFooter();
 }
 
-void handleReset()
+void handleRestartGet()
+{
+  SendHeader();
+
+  server.sendContent(F("<form action='/restart' method='post'>"
+                       "<div>Press this to reboot the device... <input type='submit' value='Restart' /></div></form>"));
+  
+  SendFooter();
+}
+
+void handleRestartPost()
 {
   SendHeader();
 
@@ -198,7 +208,9 @@ void handleConfig()
              "<div><label for='currentLowBattery'>currentLowBattery:</label>"
              "<input type='checkbox' name='currentLowBattery' value='currentLowBattery'/></div>"
              // END DEBUG
-             "<div><input type='submit' value='Save' /></div>"));
+             "<div><input type='submit' value='Save' /></div>"
+             "</form>"
+             ));
 
   server.sendContent(html);
   
@@ -413,7 +425,8 @@ void setup()
   server.serveStatic("/style.css", SPIFFS, "/style.css");
   server.on("/config", handleConfig);
   server.on("/submit", handleSubmit);
-  server.on("/reset", handleReset);
+  server.on("/restart", HTTP_GET, handleRestartGet);
+  server.on("/restart", HTTP_POST, handleRestartPost);
   server.on("/status", handleStatus);
   server.on("/trigger", handleTrigger);
   server.on("/stop", handleStop);
