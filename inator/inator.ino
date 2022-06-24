@@ -21,6 +21,10 @@ bool homekit_initialized = false;
 LSM lsm;
 Debounce sensor1, sensor2;
 
+#ifndef MIN
+#define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
+
 #define ALERTLED 1 // TX pin, GPIO 1. Blue.
 #define SENSORLED 4 // D2 pin, GPIO 4. Green.
 
@@ -68,40 +72,61 @@ void logmsg(const char *msg)
   }
 }
 
-void handleLs()
+void SendHeader()
 {
   server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, FPSTR(texthtml), "");
+  fs::File f = SPIFFS.open("/header.html", "r");
+  server.sendContent(f);
+  f.close();
+}
+
+void SendFooter()
+{
+  fs::File f = SPIFFS.open("/footer.html", "r");
+  server.sendContent(f);
+  f.close();
+}
+
+void handleLs()
+{
+  SendHeader();
+  
   File root = SPIFFS.open("/", "r");
 
   Dir dir = SPIFFS.openDir("/");
-  server.send(200, FPSTR(texthtml), F("<html><ul>"));
+  server.sendContent(F("<pre>"));
   while (dir.next()) {
-    server.sendContent(F("<li>"));
     server.sendContent(dir.fileName());
-    server.sendContent(F("</li>"));
+    server.sendContent(F("\n"));
   }
-  server.sendContent(F("</ul></html>"));
+  server.sendContent(F("</pre>"));
+  
+  SendFooter();
 }
-
 
 void handleReset()
 {
-  server.send(200, FPSTR(texthtml), F("Okay, restarting"));
+  SendHeader();
 
+  server.sendContent(F("Okay, restarting"));
+
+  SendFooter();
+  
   ESP.restart();
 }
 
 void handleStatus()
 {
-  String status = String(F("<html><div>Uptime (millis): ")) +
+  String status = String(F("<div>Uptime (millis): ")) +
     String(millis()) +
     String(F("</div><div>Free heap: ")) +
     String(ESP.getFreeHeap()) +
     String(F("</div><div>SSID: ")) +
     String(Prefs.ssid) +
-    String(F("</div><div>Password: ")) +
+    String(F("</div><div>Password: <span class='spoiler'>")) +
     String(Prefs.password) +
-    String(F("</div><div>Volume: ")) +
+    String(F("</span></div><div>Volume: ")) +
     String(Prefs.volume) +
     String(F("</div><div>homeKit enabled: ")) +
     String(Prefs.homeKitEnabled ? FPSTR(ftrue) : FPSTR(ffalse)) +
@@ -123,41 +148,26 @@ void handleStatus()
     String(sensor1.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F("</div><div>sensor2: ")) +
     String(sensor2.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div></html>"));
-  server.send(200, FPSTR(texthtml), status.c_str());
-}
+    String(F("</div>"));
 
-void handleRoot()
-{
-  server.send(200, FPSTR(texthtml),
-              F("<!DOCTYPE html><html>"
-                "<h1>Hola</h1>"
-                "<p>Page list:</p><ul>"
-                "<li><a href='/config'>/config</a>: change configuration (SSID, password)</li>"
-                "<li><a href='/reset'>/reset</a>: reboots the device</li>"
-                "<li><a href='/status'>/status</a>: show current status</li>"
-                "<li><a href='/trigger'>/trigger</a>: trigger alert now</li>"
-                "<li><a href='/stop'>/stop</a>: simulate pressing the button to stop alert</li>"
-                "<li><a href='/ls'>/ls</a>: see what's on the SPIFFS</li>"
-                "</ul>"
-                "<p>This also listens on port 9001 for debugging messages.</p>"
-                "</html>")
-              );
+  SendHeader();
+  server.sendContent(status);
+  SendFooter();
 }
 
 void handleTrigger()
 {
-  server.send(200, FPSTR(texthtml), F("Okay, triggered"));
+  SendHeader();
+  server.sendContent(F("Okay, triggered"));
+  SendFooter();
+
   lsm.debugTrigger();
 }
 
 void handleConfig()
 {
   String html =
-    String(F("<!DOCTYPE html><html>"
-             "<head></head>"
-             "<body>"
-             "<form action='/submit' method='post'>"
+    String(F("<form action='/submit' method='post'>"
              "<div><label for='ssid'>Connect to SSID:</label>"
              "<input type='text' id='ssid' name='ssid' value='")) +
     String(Prefs.ssid) +
@@ -186,10 +196,13 @@ void handleConfig()
              "<div><label for='currentLowBattery'>currentLowBattery:</label>"
              "<input type='checkbox' name='currentLowBattery' value='currentLowBattery'/></div>"
              // END DEBUG
-             "<div><input type='submit' value='Save' /></div>"
-             "</body></html"));
+             "<div><input type='submit' value='Save' /></div>"));
   server.send(200, FPSTR(texthtml),
               html.c_str());
+
+  SendHeader();
+  server.sendContent(html);
+  SendFooter();
 }
 
 void handleSubmit()
@@ -225,15 +238,73 @@ void handleSubmit()
 
 void handleStop()
 {
+  SendHeader();
+  server.sendContent(F("Stopping"));
+  SendFooter();
+
   lsm.buttonPressed();
   musicPlayer.stop();
-  server.send(200, FPSTR(texthtml), F("Stopping"));
 }
 
 void handleDebug()
 {
-  server.send(200, FPSTR(texthtml), F("Debug hook confirmed - starting music playing"));
+  SendHeader();
+  server.sendContent(F("Debug hook called - starting music playing"));
+  SendFooter();
+
   musicPlayer.start(Prefs.volume);
+}
+
+void handleDownload()
+{
+
+  String filename = server.arg("file");
+  if (filename.isEmpty()) {
+    server.send(200,
+                FPSTR(texthtml), 
+                F("<html><h3>Error</h3><div>No file argument specified</div></html>"));
+    return;
+  }
+  if (!filename.startsWith("/")) {
+    filename = "/" + filename;
+  }
+  
+  fs::File f = SPIFFS.open(filename, "r");
+  if (!f) {
+    server.send(200,
+                FPSTR(texthtml),
+                F("<html><h3>Error</h3><div>File not found</div></html>"));
+    return;
+  }
+
+  server.setContentLength(CONTENT_LENGTH_UNKNOWN);
+  server.send(200, F("application/octet-stream"), "");
+  uint32_t fsize = f.size();
+  char buf[128];
+  while (fsize) {
+    uint32_t count = f.readBytes(buf, MIN(sizeof(buf), fsize));
+    fsize -= count;
+    server.sendContent(buf, count);
+  }
+  f.close();
+}
+
+fs::File fsUploadFile;
+void handleUpload()
+{
+  HTTPUpload &upload = server.upload();
+  if (upload.status == UPLOAD_FILE_START) {
+    String filename = upload.filename;
+    if (!filename.startsWith("/"))
+      filename = "/" + filename;
+    fsUploadFile = SPIFFS.open(filename, "w");
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    if (fsUploadFile)
+      fsUploadFile.write(upload.buf, upload.currentSize);
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (fsUploadFile)
+      fsUploadFile.close();
+  }
 }
 
 void StartSoftAP()
@@ -338,7 +409,8 @@ void setup()
   ArduinoOTA.setHostname("doneinator");
   ArduinoOTA.begin();
 
-  server.on("/", handleRoot);
+  server.serveStatic("/", SPIFFS, "/index.html");
+  server.serveStatic("/style.css", SPIFFS, "/style.css");
   server.on("/config", handleConfig);
   server.on("/submit", handleSubmit);
   server.on("/reset", handleReset);
@@ -347,6 +419,10 @@ void setup()
   server.on("/stop", handleStop);
   server.on("/debug", handleDebug);
   server.on("/ls", handleLs);
+  server.on("/download", handleDownload);
+  server.on("/upload", HTTP_POST, []() {
+    server.send(200, "text/plain", "{\"success\":1}");
+  }, handleUpload);
   
   server.begin();
   tcpserver.begin();
