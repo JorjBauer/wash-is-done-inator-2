@@ -6,6 +6,7 @@
 #include <ESP8266WebServer.h>
 #include <WiFiServer.h>
 #include <arduino_homekit_server.h>
+#include <ESP8266mDNS.h>
 
 #include "AudioFileSourceSPIFFS.h"
 #include "lsm.h"
@@ -349,6 +350,9 @@ void setup()
   
   server.begin();
   tcpserver.begin();
+  
+  MDNS.begin("doneinator");
+  MDNS.addService("http", "tcp", 80);
 
   if (Prefs.homeKitEnabled) {
     arduino_homekit_setup(&config);
