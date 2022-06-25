@@ -13,6 +13,7 @@ MusicPlayer::MusicPlayer()
   file = NULL;
   wav = NULL;
   out = NULL;
+  startAgainAt = 0;
 }
 
 MusicPlayer::~MusicPlayer()
@@ -26,6 +27,7 @@ void MusicPlayer::start(float volume)
   stop();
   file = new AudioFileSourceSPIFFS("/gravityfalls-mono.wav");
   out = new AudioOutputI2S();
+  this->volume = volume;
   out->SetGain(volume);
   wav = new AudioGeneratorWAV();
   wav->begin(file, out);
@@ -47,6 +49,13 @@ void MusicPlayer::stop()
   }
 }
 
+// external interface: stop playing and cancel any future alerts pending
+void MusicPlayer::endAlert()
+{
+  stop();
+  startAgainAt = 0;
+}
+
 bool MusicPlayer::isPlaying()
 {
   return (wav && out && file && wav->isRunning());
@@ -55,10 +64,22 @@ bool MusicPlayer::isPlaying()
 // return true if still playing
 bool MusicPlayer::maint()
 {
-  if (!wav || !out || !file)
+  if (!wav || !out || !file) {
+    if (startAgainAt &&
+        (millis() > startAgainAt)) {
+      startAgainAt = 0;
+      start(this->volume);
+      return true;
+    }
+    
     return false;
+  }
   if (!wav->loop()) {
     stop();
+    // Prep to start playing again in 7 minutes FIXME constant
+    startAgainAt = millis() + 7*60*1000;
+    if (startAgainAt == 0) startAgainAt = 1; // rare rollover condition...
+    
     return false;
   }
   

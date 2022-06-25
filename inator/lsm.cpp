@@ -55,7 +55,7 @@ bool LSM::sensorState(bool isOn)
     // Was off before; but is primed (or priming) now! That stops alerting, if it was
     if (alertStartedAt) {
       logmsg("stopping previous alert\n");
-      musicPlayer.stop();
+      musicPlayer.endAlert();
       ret = true;
       alertStartedAt = 0;
     }
@@ -63,7 +63,7 @@ bool LSM::sensorState(bool isOn)
   if (beforeState && !afterState) {
     // Was on before; but is off now! That's "start alerting"
     logmsg("starting alert\n");
-    musicPlayer.stop();
+    musicPlayer.endAlert();
     musicPlayer.start(volume);
     alertStartedAt = millis();
     ret = true;
@@ -77,17 +77,7 @@ void LSM::buttonPressed()
   // Reset everything - no alerting, no priming
   reset();
   washerSensor.reset();
-  musicPlayer.stop();
-}
-
-void LSM::setTimer(uint32_t ms)
-{
-  reset();
-  washerSensor.reset();
-  musicPlayer.stop();
-
-  //  musicPlayer.setDelay(ms);
-  musicPlayer.start(volume);
+  musicPlayer.endAlert();
 }
 
 bool LSM::isAlerting()
@@ -104,7 +94,7 @@ void LSM::debugTrigger()
 {
   // Fake a trigger for debugging purposes
   logmsg("debugTrigger starting alert state\n");
-  musicPlayer.stop();
+  musicPlayer.endAlert();
   musicPlayer.start(volume);
   alertStartedAt = millis();
 }

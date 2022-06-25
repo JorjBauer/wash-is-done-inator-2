@@ -15,12 +15,18 @@ class MusicPlayer {
   void stop();
   bool maint();
 
+  void endAlert();
+
   bool isPlaying();
 
  private:
   AudioGeneratorWAV *wav;
   AudioFileSourceSPIFFS *file;
   AudioOutputI2S *out;
+
+  uint32_t startAgainAt;
+
+  float volume;
 };
 
 #endif

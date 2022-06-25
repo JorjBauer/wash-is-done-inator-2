@@ -25,7 +25,6 @@ class LSM {
 
   bool sensorState(bool isOn);
   void buttonPressed();
-  void setTimer(uint32_t ms);
 
   bool isAlerting();
 

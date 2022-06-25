@@ -47,6 +47,10 @@ typedef struct _prefs {
   bool currentActive;
   bool currentTampered;
   bool currentLowBattery;
+
+  uint32_t lastS1Change;
+  uint32_t lastS2Change;
+  
 } prefs;
 
 prefs Prefs;
@@ -156,9 +160,13 @@ void handleStatus()
     String(musicPlayer.isPlaying() ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F("</div><div>sensor1: ")) +
     String(sensor1.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>sensor2: ")) +
+    String(F(", and has been for ")) +
+    String((millis() - Prefs.lastS1Change) / 1000) +
+    String(F("s</div><div>sensor2: ")) +
     String(sensor2.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div>"));
+    String(F(", and has been for ")) +
+    String((millis() - Prefs.lastS2Change) / 1000) +
+    String(F("s</div>"));
 
   SendHeader();
   server.sendContent(status);
@@ -367,6 +375,7 @@ void setup()
   lsm.setVolume(Prefs.volume);
 
   Prefs.currentState = Prefs.currentFault = Prefs.currentActive = Prefs.currentTampered = Prefs.currentLowBattery = false;
+  Prefs.lastS1Change = Prefs.lastS2Change = 0;
   
   if (fsRunning) {
     // Try to load the config file
@@ -414,6 +423,8 @@ void setup()
       StartSoftAP();
     }
   }
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);
   
   digitalWrite(ALERTLED, HIGH);
   digitalWrite(SENSORLED, HIGH);
@@ -485,7 +496,11 @@ void loop()
   server.handleClient();
   
   if (homekit_initialized && Prefs.homeKitEnabled) {
-    my_homekit_loop();
+    uint32_t nextHomekitLoop = 0;
+    if (millis() > nextHomekitLoop) {
+      my_homekit_loop();
+      nextHomekitLoop = millis() + 100;
+    }
   } 
 
   if (tcpserver.hasClient()) {
@@ -528,6 +543,8 @@ void loop()
 
   static bool prevs1;
   if (sensor1State != prevs1) {
+    Prefs.lastS1Change = millis();
+    
     if (sensor1State) {
       logmsg("s1 is TRUE\n");
     } else {
@@ -537,6 +554,8 @@ void loop()
   }
   static bool prevs2;
   if (sensor2State != prevs2) {
+    Prefs.lastS2Change = millis();
+    
     if (sensor2State) {
       logmsg("s2 is TRUE\n");
     } else {
