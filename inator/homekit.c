@@ -23,9 +23,9 @@ homekit_accessory_t *accessories[] = {
                 HOMEKIT_SERVICE(ACCESSORY_INFORMATION, .characteristics=(homekit_characteristic_t*[]){
                         HOMEKIT_CHARACTERISTIC(NAME, "WashIsDoneInator"),
                         HOMEKIT_CHARACTERISTIC(MANUFACTURER, "JorjLabs"),
-                        HOMEKIT_CHARACTERISTIC(SERIAL_NUMBER, "Q39QDPS8GRX8"),
-                        HOMEKIT_CHARACTERISTIC(MODEL, "HKVF2T/L"),
-                        HOMEKIT_CHARACTERISTIC(FIRMWARE_REVISION, "0.0.1"),
+                        HOMEKIT_CHARACTERISTIC(SERIAL_NUMBER, "703a0bb7632b32"), // 12 random digits
+                        HOMEKIT_CHARACTERISTIC(MODEL, "v2"),
+                        HOMEKIT_CHARACTERISTIC(FIRMWARE_REVISION, "0.1"),
                         HOMEKIT_CHARACTERISTIC(IDENTIFY, my_accessory_identify),
                         NULL
                 }),
@@ -46,6 +46,6 @@ homekit_accessory_t *accessories[] = {
 
 homekit_server_config_t config = {
         .accessories = accessories,
-        .password = "595-33-595",
-        .setupId="RW5X",
+        .password = "177-95-554",
+        .setupId="M3E1",
 };
