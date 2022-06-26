@@ -23,25 +23,25 @@ Install required libraries
 Build Settings
 ===
 
-Board: "LOLIN(WEMOS) D1 R2 & mini"
-Upload Speed: "921600"
-CPU Frequency: "160 MHz"
-Flash Size: "4MB (FS:2MB OTA:~1019KB)"
-Debug port: "Disabled"
-Debug Level: "None"
-IwIP Variant: "v2 Higher Bandwidth"
-VTables: "Flash"
-C++ Exceptions: "Disabled (new aborts on oom)"
-Stack Protection: "Disabled"
-Erase Flash: "Only Sketch"
-SSL Support: "All SSL ciphers (most compatible)"
-MMU: "16KB cache + 48KB IRAM (IRAM)"
-Non-32-Bit Access: "Use pgm_read macros for IRAM/PROGMEM"
+* Board: "LOLIN(WEMOS) D1 R2 & mini"
+* Upload Speed: "921600"
+* CPU Frequency: "160 MHz"
+* Flash Size: "4MB (FS:2MB OTA:~1019KB)"
+* Debug port: "Disabled"
+* Debug Level: "None"
+* IwIP Variant: "v2 Higher Bandwidth"
+* VTables: "Flash"
+* C++ Exceptions: "Disabled (new aborts on oom)"
+* Stack Protection: "Disabled"
+* Erase Flash: "Only Sketch"
+* SSL Support: "All SSL ciphers (most compatible)"
+* MMU: "16KB cache + 48KB IRAM (IRAM)"
+* Non-32-Bit Access: "Use pgm_read macros for IRAM/PROGMEM"
 
 The app fits in the default MMU 32KB cache + 32KB IRAM, but that's not
-how I'm running it. Similarly, the program is only about ???KB/MB; the
+how I'm running it. Similarly, the program is only about 571k; the
 Flash/SPIFFS trade-off could be 3MB instead of 2MB and it should be
-okay.
+okay, I think. But again that's not how I'm running it.
 
 SPIFFS
 ===
