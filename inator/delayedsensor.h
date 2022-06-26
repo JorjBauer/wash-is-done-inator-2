@@ -5,14 +5,38 @@
 
 /* Delayed sensor object
  *
- * Expects regular input to sensorState(). When it goes true, it
- * begins a priming sequence; if it stays true for some time
- * (PRIMINGTIMEMILLIS), then it finally enters a primed state. If it
- * goes false at any time while priming, then it becomes un-primed and
- * has to start over.
+ * Expects regular input to sensorState(a,b).
+ *
+ * Has three well defined states it will return from currentState():
+ *   isOff
+ *   isBlinking
+ *   isOn
+ * ... and some edge conditions where it will return isUnknown
+ * (because the light as gone on or off within the last half second).
+ *
+ * There are also the intermediate transition states, which last one
+ * polling interval before they transition to their stable values:
+ *
+ *   turnedOff -> isOff
+ *   turnedOn -> isOn
+ *   startedBlinking -> isBlinking
+ *
+ * Lastly, there's the error condition
+ *   isBroken
+ * that should never happen.
  */
 
-#define PRIMINGTIMEMILLIS 10000
+enum {
+  isOff        = 0,
+  isBlinking   = 1,
+  isOn         = 2,
+  isUnknown    = 3,
+  turnedOff,
+  turnedOn,
+  stoppedBeingOn,
+  startedBlinking,
+  isBroken
+};
 
 class DelayedSensor {
  public:
@@ -21,15 +45,13 @@ class DelayedSensor {
 
   void reset();
 
-  void sensorState(bool isOn);
-
-  bool isPrimed();
-  bool isPriming();
+  uint8_t sensorState(bool sensorIsOn);
 
  private:
-  uint32_t sensorStartedPrimingAt;
-  uint32_t sensorPrimedAt;
-  bool sensorPrimed;
+  uint8_t currentAnalysis, previousAnalysis;
+  uint32_t lastTransitionTime;
+  bool lastTransitionState;
+  uint8_t transitionCount;
 };
 
 #endif

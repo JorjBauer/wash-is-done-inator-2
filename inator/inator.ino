@@ -158,15 +158,20 @@ void handleStatus()
     String(lsm.isAlerting() ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F("</div><div>is playing: ")) +
     String(musicPlayer.isPlaying() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>sensor1: ")) +
+    String(F("</div><div>sensor1 (dryer): ")) +
     String(sensor1.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F(", and has been for ")) +
     String((millis() - Prefs.lastS1Change) / 1000) +
-    String(F("s</div><div>sensor2: ")) +
+    String(F("s</div><div>sensor2 (washer): ")) +
     String(sensor2.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
     String(F(", and has been for ")) +
     String((millis() - Prefs.lastS2Change) / 1000) +
-    String(F("s</div>"));
+    String(F("s</div><div>dryerState: ")) +
+    String(lsm.lastDryerState()) +
+    String(F("</div><div>washerState: ")) +
+    String(lsm.lastWasherState()) +
+    String(F("</div>"));
+
 
   SendHeader();
   server.sendContent(status);
@@ -233,7 +238,6 @@ void handleSubmit()
   strncpy(Prefs.ssid, new_ssid.c_str(), sizeof(Prefs.ssid));
   strncpy(Prefs.password, new_password.c_str(), sizeof(Prefs.password));
   Prefs.volume = atof(new_volume.c_str());
-  lsm.setVolume(Prefs.volume);
 
   Prefs.homeKitEnabled = server.arg("homeKitEnabled").isEmpty() ? 0 : 1;
   // Start homekit if needed. Stopping it is messier - we just stop sending data,
@@ -372,7 +376,6 @@ void setup()
   strncpy(Prefs.ssid, "", sizeof(Prefs.ssid));
   strncpy(Prefs.password, "", sizeof(Prefs.password));
   Prefs.volume = 0.05; // Default to a low but audible volume
-  lsm.setVolume(Prefs.volume);
 
   Prefs.currentState = Prefs.currentFault = Prefs.currentActive = Prefs.currentTampered = Prefs.currentLowBattery = false;
   Prefs.lastS1Change = Prefs.lastS2Change = 0;
@@ -562,9 +565,11 @@ void loop()
     prevs2 = sensor2State;
   }
 
-  bool stateForLSM = sensor2State;
-  digitalWrite(SENSORLED, stateForLSM);
-  if (lsm.sensorState(stateForLSM)) {
+  // The green LED is on whenever either of the sensors are on
+  digitalWrite(SENSORLED, sensor1State | sensor2State);
+
+  // The LSM takes both sensor states (washer first, then dryer)
+  if (lsm.sensorState(sensor2State, sensor1State)) {
     // If the state machine changes states... then transmit an update? hmm. No.
   }
 }
@@ -654,10 +659,18 @@ void processConfig(const char *lhs, const char *rhs)
   }
   else if (!strcmp(lhs, "volume")) {
     Prefs.volume = atof(rhs);
-    lsm.setVolume(Prefs.volume);
   }
   else if (!strcmp(lhs, "homeKitEnabled")) {
     Prefs.homeKitEnabled = atoi(rhs) ? true : false;
   }
 }
 
+void startMusicPlayer()
+{
+  musicPlayer.start(Prefs.volume);
+}
+
+void stopMusicPlayer()
+{
+  musicPlayer.endAlert();
+}

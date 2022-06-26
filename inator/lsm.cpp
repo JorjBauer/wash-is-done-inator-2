@@ -1,14 +1,20 @@
+#ifdef ARDUINO
 #include <Arduino.h>
+#else
+#include <stdint.h>
+#include <string.h>
+#include <stdio.h>
+extern uint32_t millis();
+#endif
 
 #include "lsm.h"
-#include "musicplayer.h"
 
 extern void logmsg(const char *msg);
-extern MusicPlayer musicPlayer;
+extern void startMusicPlayer();
+extern void stopMusicPlayer();
 
 LSM::LSM()
 {
-  this->volume = 0.05; // default (as quiet as can be)
   reset();
 }
 
@@ -22,53 +28,66 @@ void LSM::reset()
 }
 
 // return true if the inner state changes (we start or stop alerting)
-bool LSM::sensorState(bool isOn)
+bool LSM::sensorState(bool isWasherOn, bool isDryerOn)
 {
   bool ret = false;
+  char buf[50];
 
-  bool beforeState = washerSensor.isPrimed();
-  washerSensor.sensorState(isOn);
-  bool afterState = washerSensor.isPrimed();
-  bool afterPState = washerSensor.isPriming();
-
-  static bool lastBeforeState;
-  static bool lastAfterState;
-  static bool lastAfterPState;
-  if (beforeState != lastBeforeState) {
-    if (beforeState) {
-      logmsg("beforeState changed to TRUE\n");
-    } else {
-      logmsg("beforeState changed to false\n");
-    }
-    lastBeforeState = beforeState;
-  }
-  if (lastAfterState != afterState) {
-    if (afterState) {
-      logmsg("afterState changed to TRUE\n");
-    } else {
-      logmsg("afterState changed to false\n");
-    }
-    lastAfterState = afterState;
-  }
+  uint8_t previousWasherState = washerState;
+  uint8_t previousDryerState = dryerState;
   
-  if (!beforeState && (afterState || afterPState)) {
-    // Was off before; but is primed (or priming) now! That stops alerting, if it was
-    if (alertStartedAt) {
-      logmsg("stopping previous alert\n");
-      musicPlayer.endAlert();
-      ret = true;
-      alertStartedAt = 0;
-    }
+  washerState = washerSensor.sensorState(isWasherOn);
+  dryerState = dryerSensor.sensorState(isDryerOn);
+
+  // We perform actions on the edge conditions:
+  //   turnedOff, turnedOn, startedBlinking
+
+  // If either the washer or dryer has the sensor light up, then stop
+  // alerting (someone physically opened the door) - opening either
+  // door physically cancels both alert states.
+  if ((washerState == turnedOn) ||
+      (dryerState == turnedOn)) {
+    logmsg("stopping previous alert\n");
+    stopMusicPlayer();
+    ret = true;
+    alertStartedAt = 0;
   }
-  if (beforeState && !afterState) {
-    // Was on before; but is off now! That's "start alerting"
-    logmsg("starting alert\n");
-    musicPlayer.endAlert();
-    musicPlayer.start(volume);
+
+  // If there is no current alert, *AND*
+  //    the dryer has either turned off or started blinking, *AND*
+  //    the dryer was prevously on (not previously 'unknown')
+  //  then that's the start of an alert
+  if ((!alertStartedAt) &&
+      ((dryerState == turnedOff) ||
+       (dryerState == startedBlinking)) &&
+      previousDryerState == isOn) {
+    sprintf(buf, "starting alert b/c dryer: %d\n", dryerState);
+    logmsg(buf);
+    stopMusicPlayer();
+    startMusicPlayer();
     alertStartedAt = millis();
     ret = true;
   }
 
+  // If there is no current alert, *AND* the washer has either turned
+  //   off or started blinking after having been on, *AND* the dryer
+  //   is NOT CURRENTLY RUNNING (which would be solid on) then that's
+  //   the start of an alert.  (If the dryer is still running, then we
+  //   defer until the dryer ends because there's nothing for us to
+  //   do.)
+  if ((!alertStartedAt) &&
+      ((washerState == turnedOff) ||
+       (washerState == startedBlinking)) &&
+      previousWasherState == isOn &&
+      (dryerState != isOn)) {
+    sprintf(buf, "starting alert b/c washer: %d (%d)\n", washerState, dryerState);
+    logmsg(buf);
+    stopMusicPlayer();
+    startMusicPlayer();
+    alertStartedAt = millis();
+    ret = true;
+  }
+  
   return ret;
 }
 
@@ -77,7 +96,7 @@ void LSM::buttonPressed()
   // Reset everything - no alerting, no priming
   reset();
   washerSensor.reset();
-  musicPlayer.endAlert();
+  stopMusicPlayer();
 }
 
 bool LSM::isAlerting()
@@ -85,16 +104,22 @@ bool LSM::isAlerting()
   return (alertStartedAt ? true : false);
 }
 
-void LSM::setVolume(float v)
-{
-  this->volume = v;
-}
-
 void LSM::debugTrigger()
 {
   // Fake a trigger for debugging purposes
   logmsg("debugTrigger starting alert state\n");
-  musicPlayer.endAlert();
-  musicPlayer.start(volume);
+  stopMusicPlayer();
+  startMusicPlayer();
   alertStartedAt = millis();
 }
+
+uint8_t LSM::lastWasherState()
+{
+  return washerState;
+}
+
+uint8_t LSM::lastDryerState()
+{
+  return dryerState;
+}
+

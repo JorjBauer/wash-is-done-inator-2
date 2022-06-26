@@ -1,5 +1,12 @@
+#ifdef ARDUINO
 #include <Arduino.h>
 #include "delayedsensor.h"
+#else
+#include "delayedsensor.h"
+extern uint32_t millis();
+#endif
+
+extern void logmsg(const char *msg);
 
 DelayedSensor::DelayedSensor()
 {
@@ -12,59 +19,162 @@ DelayedSensor::~DelayedSensor()
 
 void DelayedSensor::reset()
 {
-  sensorStartedPrimingAt = sensorPrimedAt = 0;
-  sensorPrimed = false;
+  currentAnalysis = isUnknown;
+  previousAnalysis = isUnknown;
+  lastTransitionTime = 0;
+  transitionCount = 0;
+  lastTransitionState = false;
 }
 
-void DelayedSensor::sensorState(bool isOn)
+uint8_t DelayedSensor::sensorState(bool sensorIsOn)
 {
-  if (isOn) {
-    // if we are primed, and the sensor is on, there's nothing to do.
-    if (sensorPrimed) {
-      return;
+  // First handle the case where we've decided it's full-on, because
+  // that's easy. Either it's still on or it is off (and goes to an
+  // unknown state that might be off or might be blinking)
+  if (currentAnalysis == isOn) {
+    if (sensorIsOn) {
+      // Nothing to do if we've decided it's solidly on, and it's still on
+      return currentAnalysis;
+    } else {
+      // Transition from on-to-off - we can't tell if it's off or blinking yet
+      previousAnalysis = currentAnalysis;
+      currentAnalysis = isUnknown;
+      lastTransitionTime = millis();
+      transitionCount = 1;
+      lastTransitionState = sensorIsOn;
+      logmsg("sensor update: on-to-unknown\n");
+      return previousAnalysis; // Let the Unknown handler return a state in the next update
     }
-
-    // So, we're not primed. Are we priming?
-    if (sensorStartedPrimingAt) {
-      // Are we past the priming time?
-      if ((uint32_t)millis() >= (uint32_t)sensorStartedPrimingAt + (uint32_t)PRIMINGTIMEMILLIS) {
-	sensorPrimed = true;
-	sensorPrimedAt = millis();
-	return;
-      }
-
-      return;
-    }
-
-    // We're not primed, and we're not priming. Start priming.
-    sensorStartedPrimingAt = millis();
-  } else {
-    // Are we primed? If so, let's un-prime immediately.
-    if (sensorPrimed) {
-      sensorPrimed = 0;
-      sensorPrimedAt = 0;
-      sensorStartedPrimingAt = 0;
-      return;
-    }
-
-    // Are we priming? If so, stop immediately.
-    if (sensorStartedPrimingAt) {
-      sensorStartedPrimingAt = 0;
-      return;
-    }
-
-    // Am not primed, and was not primed. Sensor must have already
-    // been off; nothing to do.
   }
-}
 
-bool DelayedSensor::isPrimed()
-{
-  return sensorPrimed;
-}
+  // Similarly easy: if we decided it's off, then either it's still
+  // off or it went to unknown
+  if (currentAnalysis == isOff) {
+    if (!sensorIsOn) {
+      return currentAnalysis;
+    } else {
+      // Transition from off-to-on - we can't tell if it's off or blinking yet
+      previousAnalysis = currentAnalysis;
+      currentAnalysis = isUnknown;
+      lastTransitionTime = millis();
+      transitionCount = 1;
+      lastTransitionState = sensorIsOn;
+      logmsg("sensor update: off-to-unknown\n");
+      return previousAnalysis; // Let the Unknown handler return a state in the next update
+    }
+  }
 
-bool DelayedSensor::isPriming()
-{
-  return sensorStartedPrimingAt ? true : false;
-}
+  // If we've decided it's blinking, it could transition to off or on,
+  // or still be blinking. But it's not unknown in any of those states.
+  if (currentAnalysis == isBlinking) {
+    if (sensorIsOn != lastTransitionState) {
+      lastTransitionState = sensorIsOn;
+      // The sensor has changed state. How long has it been?
+      if ((millis() - lastTransitionTime) < 1000) {
+        // Less than a second. It's still blinking.
+        transitionCount++;
+        lastTransitionTime = millis();
+        logmsg("sensor update: blinking, still blinking\n");
+        return currentAnalysis;
+      } else {
+        // It stayed that way for more than a second before changing -
+        // that's not blinking, it's either on or off
+        previousAnalysis = currentAnalysis;
+        currentAnalysis = sensorIsOn ? isOn : isOff;
+        lastTransitionTime = millis();
+        transitionCount = 1;
+        if (sensorIsOn)
+          logmsg("sensor update: blinking-to-on\n");
+        else
+          logmsg("sensor update: blinking-to-off\n");
+        return sensorIsOn ? turnedOn : turnedOff;
+      }
+    } else {
+      // Sensor state is the same as it was before - how long has it
+      // been that way?
+      if ((millis() - lastTransitionTime) >= 1000) {
+        // More than a second: it's no longer blinking
+        previousAnalysis = currentAnalysis;
+        currentAnalysis = sensorIsOn ? isOn : isOff;
+        lastTransitionTime = millis();
+        transitionCount = 1;
+        lastTransitionState = sensorIsOn;
+        lastTransitionTime = millis();
+        if (sensorIsOn)
+          logmsg("sensor update: blinking-to-on\n");
+        else
+          logmsg("sensor update: blinking-to-off\n");
+        return sensorIsOn ? turnedOn : turnedOff;
+      } else {
+        // still blinking, nothing to do
+        return currentAnalysis;
+      }
+    }
+  }
 
+  // If we don't know what state it's in, then we need to watch for
+  // transitions.
+  if (currentAnalysis == isUnknown) {
+    // Either the light has transitioned, or it has not.
+    if (sensorIsOn == lastTransitionState) {
+      // Has it been in the same state for more than a second?
+      if ((millis() - lastTransitionTime) >= 1000) {
+        // Yes: so we know it's either on or off now
+        //
+        // Don't change previousAnalysis - we need to know if this is
+        // an on-unknown-off or just unknown-off
+        currentAnalysis = sensorIsOn ? isOn : isOff;
+        transitionCount = 1;
+        lastTransitionState = sensorIsOn;
+        lastTransitionTime = millis();
+        if (sensorIsOn)
+          logmsg("sensor update: unknown-to-on\n");
+        else
+          logmsg("sensor update: unknown-to-off\n");
+        return sensorIsOn ? turnedOn : turnedOff;
+      } else {
+        // No: less than a second means we still don't know
+        // anything. Keep waiting for a transition or for more than a
+        // second.
+        return previousAnalysis;
+      }
+    } else {
+      // Okay, a transition happened. Was it after more than a second?
+      if ((millis() - lastTransitionTime) >= 1000) {
+        // This is a weird case. We didn't get any sensor updates for
+        // a second, but then we got a transition notice after a
+        // second. So we skipped a state of "definintely on" or
+        // "definitely off" and went to the following state of "was on
+        // but now it's unknown again". Restart the timers and see if
+        // we can guess better next time?
+        //
+        // Don't change previousAnalysis - we need to know if this is
+        // an on-unknown-off or just unknown-off
+        currentAnalysis = sensorIsOn ? isOn : isOff;
+        transitionCount = 1;
+        lastTransitionState = sensorIsOn;
+        lastTransitionTime = millis();
+        return sensorIsOn ? turnedOn : turnedOff;
+      }
+      // A transition at less than a second could be a blink, if there
+      // have been enough of them. Let's count!
+      if (++transitionCount >= 4) {
+        // YES it's definitely blinking.
+        previousAnalysis = currentAnalysis;
+        currentAnalysis = isBlinking;
+        lastTransitionState = sensorIsOn;
+        lastTransitionTime = millis();
+        logmsg("sensor update: unknown-to-blinking\n");
+        return startedBlinking;
+      }
+      // No, we're still looking for more blinks to confirm, so keep waiting
+      lastTransitionState = sensorIsOn;
+      lastTransitionTime = millis();
+      logmsg("sensor update: waiting for more blinks\n");
+      return previousAnalysis;
+    }
+  }
+
+  // NOTREACHED (error, unknown state)
+  return isBroken;
+}
