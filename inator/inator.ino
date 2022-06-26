@@ -470,22 +470,20 @@ bool buttonIsPressed()
 
 void my_homekit_loop()
 {
-  if (Prefs.homeKitEnabled) {
-    arduino_homekit_loop();
-    static uint32_t nextReport = 0;
-    if (millis() > nextReport) {
-      sensorState.value.int_value = Prefs.currentState ? 1 : 0;
-      //    statusFault.value.int_value = Prefs.currentFault ? 1 : 0;
-      //    statusActive.value.int_value = Prefs.currentActive ? 1 : 0;
-      //    statusTampered.value.int_value = Prefs.currentTampered ? 1 : 0;
-      //    statusLowBattery.value.int_value = Prefs.currentLowBattery ? 1 : 0;
-      homekit_characteristic_notify(&sensorState, sensorState.value);
-      //    homekit_characteristic_notify(&statusFault, statusFault.value);
-      //    homekit_characteristic_notify(&statusActive, statusActive.value);
-      //    homekit_characteristic_notify(&statusTampered, statusTampered.value);
-      //    homekit_characteristic_notify(&statusLowBattery, statusLowBattery.value);
-      nextReport = millis() + 10000; // 10 seconds
-    }
+  arduino_homekit_loop();
+  static uint32_t nextReport = 0;
+  if (millis() > nextReport) {
+    sensorState.value.int_value = Prefs.currentState ? 1 : 0;
+    //    statusFault.value.int_value = Prefs.currentFault ? 1 : 0;
+    //    statusActive.value.int_value = Prefs.currentActive ? 1 : 0;
+    //    statusTampered.value.int_value = Prefs.currentTampered ? 1 : 0;
+    //    statusLowBattery.value.int_value = Prefs.currentLowBattery ? 1 : 0;
+    homekit_characteristic_notify(&sensorState, sensorState.value);
+    //    homekit_characteristic_notify(&statusFault, statusFault.value);
+    //    homekit_characteristic_notify(&statusActive, statusActive.value);
+    //    homekit_characteristic_notify(&statusTampered, statusTampered.value);
+    //    homekit_characteristic_notify(&statusLowBattery, statusLowBattery.value);
+    nextReport = millis() + 10000; // 10 seconds
   }
 }
 
