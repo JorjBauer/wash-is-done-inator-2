@@ -6,6 +6,12 @@
 extern uint32_t millis();
 #endif
 
+// How many ms before we consider it "compeltely on" or "completely
+// off" rather than blinking? In theory, 1000 (1s) is fine; but
+// sometimes the homekit crypto takes > 1s, and we miss a polling
+// cycle. So trying 5s...
+#define HOLDTIME 5000
+
 extern void logmsg(const char *msg);
 
 DelayedSensor::DelayedSensor()
@@ -66,33 +72,33 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
 
   // If we've decided it's blinking, it could transition to off or on,
   // or still be blinking. But it's not unknown in any of those states.
+  char buf[50];
   if (currentAnalysis == isBlinking) {
     if (sensorIsOn != lastTransitionState) {
       lastTransitionState = sensorIsOn;
       // The sensor has changed state. How long has it been?
-      if ((millis() - lastTransitionTime) < 1000) {
+      if ((millis() - lastTransitionTime) < HOLDTIME) {
         // Less than a second. It's still blinking.
         transitionCount++;
+        sprintf(buf, "sensor update: blinking, still: %ld\n", millis()-lastTransitionTime);
+        logmsg(buf);
         lastTransitionTime = millis();
-        logmsg("sensor update: blinking, still blinking\n");
         return currentAnalysis;
       } else {
         // It stayed that way for more than a second before changing -
         // that's not blinking, it's either on or off
         previousAnalysis = currentAnalysis;
         currentAnalysis = sensorIsOn ? isOn : isOff;
+        sprintf(buf, "sensor update: blinking-to-%s: %ld\n", sensorIsOn?"on":"off", millis()-lastTransitionTime);
+        logmsg(buf);
         lastTransitionTime = millis();
         transitionCount = 1;
-        if (sensorIsOn)
-          logmsg("sensor update: blinking-to-on\n");
-        else
-          logmsg("sensor update: blinking-to-off\n");
         return sensorIsOn ? turnedOn : turnedOff;
       }
     } else {
       // Sensor state is the same as it was before - how long has it
       // been that way?
-      if ((millis() - lastTransitionTime) >= 1000) {
+      if ((millis() - lastTransitionTime) >= HOLDTIME) {
         // More than a second: it's no longer blinking
         previousAnalysis = currentAnalysis;
         currentAnalysis = sensorIsOn ? isOn : isOff;
@@ -118,7 +124,7 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
     // Either the light has transitioned, or it has not.
     if (sensorIsOn == lastTransitionState) {
       // Has it been in the same state for more than a second?
-      if ((millis() - lastTransitionTime) >= 1000) {
+      if ((millis() - lastTransitionTime) >= HOLDTIME) {
         // Yes: so we know it's either on or off now
         //
         // Don't change previousAnalysis - we need to know if this is
@@ -140,7 +146,7 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
       }
     } else {
       // Okay, a transition happened. Was it after more than a second?
-      if ((millis() - lastTransitionTime) >= 1000) {
+      if ((millis() - lastTransitionTime) >= HOLDTIME) {
         // This is a weird case. We didn't get any sensor updates for
         // a second, but then we got a transition notice after a
         // second. So we skipped a state of "definintely on" or
