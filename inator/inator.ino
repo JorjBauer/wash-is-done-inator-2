@@ -11,6 +11,7 @@
 #include "AudioFileSourceSPIFFS.h"
 #include "lsm.h"
 #include "debounce.h"
+#include "templater.h"
 
 #include "musicplayer.h"
 MusicPlayer musicPlayer;
@@ -20,6 +21,8 @@ bool homekit_initialized = false;
 
 LSM lsm;
 Debounce sensor1, sensor2;
+
+Templater templ;
 
 #ifndef MIN
 #define MIN(a,b) ((a) < (b) ? (a) : (b))
@@ -43,10 +46,6 @@ typedef struct _prefs {
 
   // status, not really prefs... FIXME
   bool currentState;
-  bool currentFault;
-  bool currentActive;
-  bool currentTampered;
-  bool currentLowBattery;
 
   uint32_t lastS1Change;
   uint32_t lastS2Change;
@@ -63,15 +62,11 @@ static const char ffalse[] PROGMEM = "false";
 
 extern "C" homekit_server_config_t config;
 extern "C" homekit_characteristic_t sensorState;
-//extern "C" homekit_characteristic_t statusFault;
-//extern "C" homekit_characteristic_t statusActive;
-//extern "C" homekit_characteristic_t statusTampered;
-//extern "C" homekit_characteristic_t statusLowBattery;
 
 void logmsg(const char *msg)
 {
   if (tcpclient.connected()) {
-    tcpclient.println(msg);
+    tcpclient.print(msg);
     tcpclient.flush();
   }
 }
@@ -113,8 +108,9 @@ void handleRestartGet()
 {
   SendHeader();
 
-  server.sendContent(F("<form action='/restart' method='post'>"
-                       "<div>Press this to reboot the device... <input type='submit' value='Restart' /></div></form>"));
+  fs::File f = SPIFFS.open("/restart-get.html", "r");
+  templ.generateOutput(&server, f, NULL);
+  f.close();
   
   SendFooter();
 }
@@ -132,49 +128,28 @@ void handleRestartPost()
 
 void handleStatus()
 {
-  String status = String(F("<div>Uptime (millis): ")) +
-    String(millis()) +
-    String(F("</div><div>Free heap: ")) +
-    String(ESP.getFreeHeap()) +
-    String(F("</div><div>SSID: ")) +
-    String(Prefs.ssid) +
-    String(F("</div><div>Password: <span class='spoiler'>")) +
-    String(Prefs.password) +
-    String(F("</span></div><div>Volume: ")) +
-    String(Prefs.volume) +
-    String(F("</div><div>homeKit enabled: ")) +
-    String(Prefs.homeKitEnabled ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>State: ")) +
-    String(Prefs.currentState ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>Fault: ")) +
-    String(Prefs.currentFault ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>Active: ")) +
-    String(Prefs.currentActive ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>Tampered: ")) +
-    String(Prefs.currentTampered ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>LowBattery: ")) +
-    String(Prefs.currentLowBattery ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>LSM is alerting: ")) +
-    String(lsm.isAlerting() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>is playing: ")) +
-    String(musicPlayer.isPlaying() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F("</div><div>sensor1 (dryer): ")) +
-    String(sensor1.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F(", and has been for ")) +
-    String((millis() - Prefs.lastS1Change) / 1000) +
-    String(F("s</div><div>sensor2 (washer): ")) +
-    String(sensor2.output() ? FPSTR(ftrue) : FPSTR(ffalse)) +
-    String(F(", and has been for ")) +
-    String((millis() - Prefs.lastS2Change) / 1000) +
-    String(F("s</div><div>dryerState: ")) +
-    String(lsm.lastDryerState()) +
-    String(F("</div><div>washerState: ")) +
-    String(lsm.lastWasherState()) +
-    String(F("</div>"));
-
-
   SendHeader();
-  server.sendContent(status);
+  
+  repvars *r = templ.newRepvar(String("@UPTIME@"), String(millis()));
+  r = templ.addRepvar(r, String("@HEAP@"), String(ESP.getFreeHeap()));
+  r = templ.addRepvar(r, String("@SSID@"), String(Prefs.ssid));
+  r = templ.addRepvar(r, String("@PASS@"), String(Prefs.password));
+  r = templ.addRepvar(r, String("@VOL@"), String(Prefs.volume));
+  r = templ.addRepvar(r, String("@HK@"), String(Prefs.homeKitEnabled ? FPSTR(ftrue) : FPSTR(ffalse)));
+  r = templ.addRepvar(r, String("@STATE@"), String(Prefs.currentState ? FPSTR(ftrue) : FPSTR(ffalse)));
+  r = templ.addRepvar(r, String("@ALERT@"), String(lsm.isAlerting()));
+  r = templ.addRepvar(r, String("@PLAY@"), String(musicPlayer.isPlaying()));
+  r = templ.addRepvar(r, String("@S1@"), String(sensor1.output()));
+  r = templ.addRepvar(r, String("@S2@"), String(sensor2.output()));
+  r = templ.addRepvar(r, String("@S1T@"), String((millis() - Prefs.lastS1Change)/1000));
+  r = templ.addRepvar(r, String("@S2T@"), String((millis() - Prefs.lastS2Change)/1000));
+  r = templ.addRepvar(r, String("@DryState@"), String(lsm.lastDryerState()));
+  r = templ.addRepvar(r, String("@WashState@"), String(lsm.lastWasherState()));
+
+  fs::File f = SPIFFS.open("/status.html", "r");
+  templ.generateOutput(&server, f, r);
+  f.close();
+ 
   SendFooter();
 }
 
@@ -212,14 +187,6 @@ void handleConfig()
              // DEBUG: dump of settings for HomeKit testing
              "<div><label for='currentState'>currentState:</label>"
              "<input type='checkbox' name='currentState' value='currentState'/></div>"
-             "<div><label for='currentFault'>currentFault:</label>"
-             "<input type='checkbox' name='currentFault' value='currentFault'/></div>"
-             "<div><label for='currentActive'>currentActive:</label>"
-             "<input type='checkbox' name='currentActive' value='currentActive'/></div>"
-             "<div><label for='currentTampered'>currentTampered:</label>"
-             "<input type='checkbox' name='currentTampered' value='currentTampered'/></div>"
-             "<div><label for='currentLowBattery'>currentLowBattery:</label>"
-             "<input type='checkbox' name='currentLowBattery' value='currentLowBattery'/></div>"
              // END DEBUG
              "<div><input type='submit' value='Save' /></div>"
              "</form>"
@@ -248,10 +215,6 @@ void handleSubmit()
   }
   
   Prefs.currentState = server.arg("currentState").isEmpty() ? 0 : 1;
-  Prefs.currentFault = server.arg("currentFault").isEmpty() ? 0 : 1;
-  Prefs.currentActive = server.arg("currentActive").isEmpty() ? 0 : 1;
-  Prefs.currentTampered = server.arg("currentTampered").isEmpty() ? 0 : 1;
-  Prefs.currentLowBattery = server.arg("currentLowBattery").isEmpty() ? 0 : 1;
   
   writePrefs();
 
@@ -377,7 +340,7 @@ void setup()
   strncpy(Prefs.password, "", sizeof(Prefs.password));
   Prefs.volume = 0.05; // Default to a low but audible volume
 
-  Prefs.currentState = Prefs.currentFault = Prefs.currentActive = Prefs.currentTampered = Prefs.currentLowBattery = false;
+  Prefs.currentState = false;
   Prefs.lastS1Change = Prefs.lastS2Change = 0;
   
   if (fsRunning) {
@@ -477,15 +440,7 @@ void my_homekit_loop()
   static uint32_t nextReport = 0;
   if (millis() > nextReport) {
     sensorState.value.int_value = Prefs.currentState ? 1 : 0;
-    //    statusFault.value.int_value = Prefs.currentFault ? 1 : 0;
-    //    statusActive.value.int_value = Prefs.currentActive ? 1 : 0;
-    //    statusTampered.value.int_value = Prefs.currentTampered ? 1 : 0;
-    //    statusLowBattery.value.int_value = Prefs.currentLowBattery ? 1 : 0;
     homekit_characteristic_notify(&sensorState, sensorState.value);
-    //    homekit_characteristic_notify(&statusFault, statusFault.value);
-    //    homekit_characteristic_notify(&statusActive, statusActive.value);
-    //    homekit_characteristic_notify(&statusTampered, statusTampered.value);
-    //    homekit_characteristic_notify(&statusLowBattery, statusLowBattery.value);
     nextReport = millis() + 10000; // 10 seconds
   }
 }
