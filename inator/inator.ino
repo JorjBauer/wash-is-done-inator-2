@@ -19,6 +19,8 @@ MusicPlayer musicPlayer;
 bool fsRunning = false;
 bool homekit_initialized = false;
 
+bool softAPMode = false;
+
 LSM lsm;
 Debounce sensor1, sensor2;
 
@@ -304,6 +306,7 @@ void StartSoftAP()
   IPAddress gateway(192,168,4,1);
   IPAddress subnet(255,255,255,0);
   WiFi.softAPConfig(local_IP, gateway, subnet);
+  softAPMode = true;
 }
 
 
@@ -445,9 +448,29 @@ void my_homekit_loop()
   }
 }
 
+void wifi_stayConnected()
+{
+  if (softAPMode)
+    return;
+  
+  static uint32_t nextMillis = 0;
+  if (millis() > nextMillis) {
+    if (WiFi.status() != WL_CONNECTED) {
+      WiFi.disconnect();
+      WiFi.begin(Prefs.ssid, Prefs.password);
+    }
+
+    MDNS.announce();
+
+    nextMillis = millis() + 15000;
+  }
+}
+
 
 void loop()
 {
+  wifi_stayConnected();
+
   ArduinoOTA.handle();
   server.handleClient();
   
