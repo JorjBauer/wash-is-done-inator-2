@@ -14,6 +14,27 @@
 #include "templater.h"
 
 #include "musicplayer.h"
+
+/*
+I'd like to be able to do this but haven't found a constant yet
+
+#ifndef ESP8266_WEMOS_D1MINI
+#error This should be compiled for the WEMOS D1 R2 & Mini
+#endif
+*/
+
+#if F_CPU < 160000000L
+#error The CPU speed needs to be set to 160MHz for HomeKit to pair properly
+#endif
+
+#if (MMU_IRAM_SIZE!=0x8000) || (MMU_ICACHE_SIZE!=0x8000)
+#error MMU should be set to balanced
+#endif
+
+#if TCP_MSS!=1460
+#error For HomeKit, lwIP must be set to "v2 Higher Bandwidth"
+#endif
+
 MusicPlayer musicPlayer;
 
 bool fsRunning = false;
@@ -45,6 +66,7 @@ typedef struct _prefs {
   char password[50];
   float volume;
   bool homeKitEnabled;
+  bool audioNotificationEnabled;
 
   // status, not really prefs... FIXME
   bool currentState;
@@ -138,6 +160,7 @@ void handleStatus()
   r = templ.addRepvar(r, String("@PASS@"), String(Prefs.password));
   r = templ.addRepvar(r, String("@VOL@"), String(Prefs.volume));
   r = templ.addRepvar(r, String("@HK@"), String(Prefs.homeKitEnabled ? FPSTR(ftrue) : FPSTR(ffalse)));
+  r = templ.addRepvar(r, String("@AN@"), String(Prefs.audioNotificationEnabled ? FPSTR(ftrue) : FPSTR(ffalse)));
   r = templ.addRepvar(r, String("@STATE@"), String(Prefs.currentState ? FPSTR(ftrue) : FPSTR(ffalse)));
   r = templ.addRepvar(r, String("@ALERT@"), String(lsm.isAlerting()));
   r = templ.addRepvar(r, String("@PLAY@"), String(musicPlayer.isPlaying()));
@@ -185,6 +208,10 @@ void handleConfig()
              "<div><label for='homeKitEnabled'>homeKitEnabled:</label>"
              "<input type='checkbox' name='homeKitEnabled' value='homeKitEnabled' ")) +
     String(Prefs.homeKitEnabled ? "checked" : "") +
+    String(F("'/></div>"
+             "<div><label for='audioEnabled'>audioAlertEnabled:</label>"
+             "<input type='checkbox' name='audioEnabled' value='audioEnabled' ")) +
+    String(Prefs.audioNotificationEnabled ? "checked" : "") +
     String(F("/></div>"
              // DEBUG: dump of settings for HomeKit testing
              "<div><label for='currentState'>currentState:</label>"
@@ -215,7 +242,8 @@ void handleSubmit()
     arduino_homekit_setup(&config);
     homekit_initialized = true;
   }
-  
+
+  Prefs.audioNotificationEnabled = server.arg("audioEnabled").isEmpty() ? 0 : 1;
   Prefs.currentState = server.arg("currentState").isEmpty() ? 0 : 1;
   
   writePrefs();
@@ -299,6 +327,7 @@ void handleUpload()
 void StartSoftAP()
 {
   WiFi.mode(WIFI_AP);
+  //  WiFi.setPhyMode((WiFiPhyMode_t)PHY_MODE_11N);
   WiFi.softAP("WashIsDoneInator");
   // Set the IP address and info for SoftAP mode. Note this is also
   // the default IP (192.168.4.1), but better to be explicit...
@@ -373,6 +402,7 @@ void setup()
     StartSoftAP();
   } else {
     WiFi.mode(WIFI_STA);
+    //    WiFi.setPhyMode((WiFiPhyMode_t)PHY_MODE_11N);
     WiFi.begin(Prefs.ssid, Prefs.password);
     uint8_t count=0;
     while (count < 10 && WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -394,6 +424,7 @@ void setup()
   }
   WiFi.setAutoReconnect(true);
   WiFi.persistent(true);
+  //  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   
   digitalWrite(ALERTLED, HIGH);
   digitalWrite(SENSORLED, HIGH);
@@ -565,7 +596,8 @@ void writePrefs()
   f.println(Prefs.volume);
   f.print("homeKitEnabled=");
   f.println(Prefs.homeKitEnabled ? "1" : "0");
-
+  f.print("audioNotificationEnabled=");
+  f.println(Prefs.audioNotificationEnabled ? "1" : "0");
   f.close();
 }
 
@@ -641,14 +673,21 @@ void processConfig(const char *lhs, const char *rhs)
   else if (!strcmp(lhs, "homeKitEnabled")) {
     Prefs.homeKitEnabled = atoi(rhs) ? true : false;
   }
+  else if (!strcmp(lhs, "audioNotificationEnabled")) {
+    Prefs.audioNotificationEnabled = atoi(rhs) ? true : false;
+  }
 }
 
 void startMusicPlayer()
 {
-  musicPlayer.start(Prefs.volume);
+  if (Prefs.audioNotificationEnabled) {
+    musicPlayer.start(Prefs.volume);
+  }
 }
 
 void stopMusicPlayer()
 {
+  // Always end, even if not audioNotificationEnabled, b/c user might
+  // have changed it and we didn't notice? <shrug> not a problem I guess
   musicPlayer.endAlert();
 }
