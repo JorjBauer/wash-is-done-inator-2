@@ -164,8 +164,14 @@ void handleStatus()
   r = templ.addRepvar(r, String("@STATE@"), String(Prefs.currentState ? FPSTR(ftrue) : FPSTR(ffalse)));
   r = templ.addRepvar(r, String("@ALERT@"), String(lsm.isAlerting()));
   r = templ.addRepvar(r, String("@PLAY@"), String(musicPlayer.isPlaying()));
-  r = templ.addRepvar(r, String("@S1@"), String(sensor1.output()));
-  r = templ.addRepvar(r, String("@S2@"), String(sensor2.output()));
+  uint8_t s1o = sensor1.output();
+  uint8_t s2o = sensor2.output();
+  r = templ.addRepvar(r, String("@S1@"), String((s1o == isOff) ? "Off" :
+                                                ( (s1o == isBlinking) ? "Blinking" :
+                                                  ( (s1o == isOn) ? "On" : "Unknown"))));
+  r = templ.addRepvar(r, String("@S2@"), String((s2o == isOff) ? "Off" :
+                                                ( (s2o == isBlinking) ? "Blinking" :
+                                                  ( (s2o == isOn) ? "On" : "Unknown"))));
   r = templ.addRepvar(r, String("@S1T@"), String((millis() - Prefs.lastS1Change)/1000));
   r = templ.addRepvar(r, String("@S2T@"), String((millis() - Prefs.lastS2Change)/1000));
   r = templ.addRepvar(r, String("@DryState@"), String(lsm.lastDryerState()));
@@ -327,7 +333,7 @@ void handleUpload()
 void StartSoftAP()
 {
   WiFi.mode(WIFI_AP);
-  //  WiFi.setPhyMode((WiFiPhyMode_t)PHY_MODE_11N);
+  WiFi.setPhyMode((WiFiPhyMode_t)PHY_MODE_11N);
   WiFi.softAP("WashIsDoneInator");
   // Set the IP address and info for SoftAP mode. Note this is also
   // the default IP (192.168.4.1), but better to be explicit...
@@ -402,7 +408,7 @@ void setup()
     StartSoftAP();
   } else {
     WiFi.mode(WIFI_STA);
-    //    WiFi.setPhyMode((WiFiPhyMode_t)PHY_MODE_11N);
+    WiFi.setPhyMode((WiFiPhyMode_t)PHY_MODE_11N);
     WiFi.begin(Prefs.ssid, Prefs.password);
     uint8_t count=0;
     while (count < 10 && WiFi.waitForConnectResult() != WL_CONNECTED) {
@@ -424,7 +430,7 @@ void setup()
   }
   WiFi.setAutoReconnect(true);
   WiFi.persistent(true);
-  //  WiFi.setSleepMode(WIFI_NONE_SLEEP);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   
   digitalWrite(ALERTLED, HIGH);
   digitalWrite(SENSORLED, HIGH);
@@ -470,13 +476,10 @@ bool buttonIsPressed()
 
 void my_homekit_loop()
 {
-  arduino_homekit_loop();
-  static uint32_t nextReport = 0;
-  if (millis() > nextReport) {
-    sensorState.value.int_value = Prefs.currentState ? 1 : 0;
-    homekit_characteristic_notify(&sensorState, sensorState.value);
-    nextReport = millis() + 10000; // 10 seconds
-  }
+  arduino_homekit_loop(); // FIXME: Was doing this every 100 millis. Worth it?
+  // FIXME: tried doing the rest of this every 10 seconds, might have caused more trouble than it solved.
+  sensorState.value.int_value = Prefs.currentState ? 1 : 0;
+  homekit_characteristic_notify(&sensorState, sensorState.value);
 }
 
 void wifi_stayConnected()
@@ -506,11 +509,7 @@ void loop()
   server.handleClient();
   
   if (homekit_initialized && Prefs.homeKitEnabled) {
-    uint32_t nextHomekitLoop = 0;
-    if (millis() > nextHomekitLoop) {
-      my_homekit_loop();
-      nextHomekitLoop = millis() + 100;
-    }
+    my_homekit_loop();
   } 
 
   if (tcpserver.hasClient()) {
