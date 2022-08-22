@@ -10,14 +10,22 @@
 #include <WebServer.h>
 
 #include "debounce.h"
+#include "lsm.h"
 
 #include "templater.h"
 Templater templ;
+
+const int pin_sensor1 = A1;
+const int pin_sensor2 = A2;
+const int pin_switch = A3;
+const int pin_led1 = MISO; // aka A12, pin 13
+const int pin_led2 = MOSI; // aka A10, pin 11
 
 bool fsRunning;
 bool softAPMode = false;
 bool homekit_initialized = false;
 
+LSM lsm;
 Debounce sensor1, sensor2;
 
 static const char texthtml[] PROGMEM = "text/html";
@@ -146,14 +154,13 @@ void handleStatus()
   //  r = templ.addRepvar(r, String("@PLAY@"), String(musicPlayer.isPlaying()));
   uint8_t s1o = sensor1.output();
   uint8_t s2o = sensor2.output();
-  /*
   r = templ.addRepvar(r, String("@S1@"), String((s1o == isOff) ? "Off" :
                                                 ( (s1o == isBlinking) ? "Blinking" :
                                                   ( (s1o == isOn) ? "On" : "Unknown"))));
   r = templ.addRepvar(r, String("@S2@"), String((s2o == isOff) ? "Off" :
                                                 ( (s2o == isBlinking) ? "Blinking" :
                                                   ( (s2o == isOn) ? "On" : "Unknown"))));
-  */
+
   r = templ.addRepvar(r, String("@S1T@"), String((millis() - Prefs.lastS1Change)/1000));
   r = templ.addRepvar(r, String("@S2T@"), String((millis() - Prefs.lastS2Change)/1000));
   //  r = templ.addRepvar(r, String("@DryState@"), String(lsm.lastDryerState()));
@@ -385,6 +392,9 @@ void setup()
     fsRunning = false;
   }
 
+  pinMode(pin_sensor1, INPUT);
+  pinMode(pin_sensor2, INPUT);
+  
   // Set some default preferences in case we can't load any prefs...
   Serial.println("Setting up default prefs");
   delay(100);
@@ -512,6 +522,12 @@ void my_homekit_loop()
   }
 }
 
+void sensor_loop()
+{
+  sensor1.input(digitalRead(pin_sensor1));
+  sensor2.input(digitalRead(pin_sensor2));
+}
+
 void loop()
 {
   wifi_stayConnected();
@@ -521,4 +537,6 @@ void loop()
   if (homekit_initialized && Prefs.homeKitEnabled) {
     my_homekit_loop();
   }
+
+  sensor_loop();
 }
