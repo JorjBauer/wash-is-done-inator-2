@@ -23,20 +23,17 @@ class LSM {
 
   void reset();
 
-  bool sensorState(bool isWasherOn, bool isDryerOn);
+  bool sensorState(bool s);
   void buttonPressed();
 
   bool isAlerting();
-  uint8_t lastWasherState();
-  uint8_t lastDryerState();
+  uint8_t lastState();
   
   void debugTrigger();
   
   // private:
-  DelayedSensor washerSensor;
-  uint8_t washerState;
-  DelayedSensor dryerSensor;
-  uint8_t dryerState;
+  DelayedSensor sensor;
+  uint8_t state;
   
   uint32_t alertStartedAt;
 };
