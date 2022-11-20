@@ -1,6 +1,9 @@
 #include "debounce.h"
 
 #define DEBOUNCEINTERVAL 100
+// Should we debounce when doing off-to-on, or both off-to-on and on-to-off?
+// If this is '1', then only do off-to-on
+#define DEBOUNCE_ON_ONLY 1
 
 Debounce::Debounce()
 {
@@ -17,7 +20,12 @@ void Debounce::_checkTimer()
 {
   // If we're waiting for a debounce pulse to settle, and that time
   // has elapsed, then consider it done.
-  if (am_debouncing && millis() - debounce_start >= DEBOUNCEINTERVAL) {
+  if (am_debouncing && !last_state && DEBOUNCE_ON_ONLY) {
+    // If we're only doing DEBOUNCE_ON_ONLY, and the new state would be off,
+    // and we think we're debouncing... then we're not debouncing. We're done.
+    debounced_state = last_state;
+    am_debouncing = false;
+  } else if (am_debouncing && millis() - debounce_start >= DEBOUNCEINTERVAL) {
     debounced_state = last_state;
     am_debouncing = false;
   }
