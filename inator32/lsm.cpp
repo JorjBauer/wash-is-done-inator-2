@@ -20,7 +20,6 @@ extern void endAlert(void *o);
 
 LSM::LSM()
 {
-  reset();
 }
 
 LSM::~LSM()
