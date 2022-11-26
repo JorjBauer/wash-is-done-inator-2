@@ -193,6 +193,15 @@ void handleStatus()
   SendFooter();
 }
 
+void handleStop()
+{
+  washerLSM.buttonPressed();
+  
+  // Redirect to /status to show the changes
+  server.sendHeader(F("Location"), String("/status"), true);
+  server.send(302, FPSTR(textplain), "");
+}
+
 void handleLs()
 {
   SendHeader();
@@ -494,6 +503,7 @@ void setup()
   server.on("/status", handleStatus);
   server.on("/ls", handleLs);
   server.on("/download", handleDownload);
+  server.on("/stop", handleStop);
   server.on("/upload", HTTP_POST, []() {
     server.send(200, "text/plain", "{\"success\":1}");
   }, handleUpload);
