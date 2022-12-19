@@ -45,7 +45,12 @@ void Templater::deleteRepvar(repvars *r)
   }
 }
 
-void Templater::generateOutput(WebServer *server,
+void Templater::generateOutput(
+#ifdef ESP8266
+                               ESP8266WebServer *server,
+#else
+                               WebServer *server,
+#endif
                                fs::File f,
                                repvars *r)
 {
@@ -67,4 +72,5 @@ void Templater::generateOutput(WebServer *server,
     aLine += "\n";
     server->sendContent(aLine);
   }
+  deleteRepvar(r);
 }

@@ -40,14 +40,17 @@ enum {
 
 class DelayedSensor {
  public:
-  DelayedSensor();
+  DelayedSensor(const char *name);
   ~DelayedSensor();
 
   void reset();
 
-  uint8_t sensorState(bool sensorIsOn);
+  uint8_t input(bool sensorIsOn);
+  uint8_t getCurrentAnalysis();
+  String getCurrentAnalysisAsString();
 
  private:
+  String name;
   uint8_t currentAnalysis, previousAnalysis;
   uint32_t lastTransitionTime;
   bool lastTransitionState;

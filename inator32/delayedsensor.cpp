@@ -1,6 +1,7 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include "delayedsensor.h"
+#include "TCPLogger.h"
 #else
 #include "delayedsensor.h"
 extern uint32_t millis();
@@ -12,10 +13,11 @@ extern uint32_t millis();
 // cycle. So trying 5s...
 #define HOLDTIME 5000
 
-extern void logmsg(const char *msg);
+extern TCPLogger tlog;
 
-DelayedSensor::DelayedSensor()
+DelayedSensor::DelayedSensor(const char *name)
 {
+  this->name = name;
   reset();
 }
 
@@ -32,7 +34,7 @@ void DelayedSensor::reset()
   lastTransitionState = false;
 }
 
-uint8_t DelayedSensor::sensorState(bool sensorIsOn)
+uint8_t DelayedSensor::input(bool sensorIsOn)
 {
   // First handle the case where we've decided it's full-on, because
   // that's easy. Either it's still on or it is off (and goes to an
@@ -48,7 +50,7 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
       lastTransitionTime = millis();
       transitionCount = 1;
       lastTransitionState = sensorIsOn;
-      logmsg("sensor update: on-to-unknown\n");
+      tlog.logmsg(name + String(" update: on-to-unknown"));
       return previousAnalysis; // Let the Unknown handler return a state in the next update
     }
   }
@@ -65,7 +67,7 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
       lastTransitionTime = millis();
       transitionCount = 1;
       lastTransitionState = sensorIsOn;
-      logmsg("sensor update: off-to-unknown\n");
+      tlog.logmsg(name + String(" update: off-to-unknown"));
       return previousAnalysis; // Let the Unknown handler return a state in the next update
     }
   }
@@ -80,8 +82,8 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
       if ((millis() - lastTransitionTime) < HOLDTIME) {
         // Less than a second. It's still blinking.
         transitionCount++;
-        sprintf(buf, "sensor update: blinking, still: %ld\n", millis()-lastTransitionTime);
-        logmsg(buf);
+        sprintf(buf, "%s update: blinking, still: %ld", name.c_str(), millis()-lastTransitionTime);
+        tlog.logmsg(buf);
         lastTransitionTime = millis();
         return currentAnalysis;
       } else {
@@ -89,8 +91,8 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
         // that's not blinking, it's either on or off
         previousAnalysis = currentAnalysis;
         currentAnalysis = sensorIsOn ? isOn : isOff;
-        sprintf(buf, "sensor update: blinking-to-%s: %ld\n", sensorIsOn?"on":"off", millis()-lastTransitionTime);
-        logmsg(buf);
+        sprintf(buf, "%s update: blinking-to-%s: %ld", name.c_str(), sensorIsOn?"on":"off", millis()-lastTransitionTime);
+        tlog.logmsg(buf);
         lastTransitionTime = millis();
         transitionCount = 1;
         return sensorIsOn ? turnedOn : turnedOff;
@@ -107,9 +109,9 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
         lastTransitionState = sensorIsOn;
         lastTransitionTime = millis();
         if (sensorIsOn)
-          logmsg("sensor update: blinking-to-on\n");
+          tlog.logmsg(name + String(" update: blinking-to-on"));
         else
-          logmsg("sensor update: blinking-to-off\n");
+          tlog.logmsg(name + String(" update: blinking-to-off"));
         return sensorIsOn ? turnedOn : turnedOff;
       } else {
         // still blinking, nothing to do
@@ -134,9 +136,9 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
         lastTransitionState = sensorIsOn;
         lastTransitionTime = millis();
         if (sensorIsOn)
-          logmsg("sensor update: unknown-to-on\n");
+          tlog.logmsg(name + String(" update: unknown-to-on"));
         else
-          logmsg("sensor update: unknown-to-off\n");
+          tlog.logmsg(name + String(" update: unknown-to-off"));
         return sensorIsOn ? turnedOn : turnedOff;
       } else {
         // No: less than a second means we still don't know
@@ -170,17 +172,48 @@ uint8_t DelayedSensor::sensorState(bool sensorIsOn)
         currentAnalysis = isBlinking;
         lastTransitionState = sensorIsOn;
         lastTransitionTime = millis();
-        logmsg("sensor update: unknown-to-blinking\n");
+        tlog.logmsg(name + String(" update: unknown-to-blinking"));
         return startedBlinking;
       }
       // No, we're still looking for more blinks to confirm, so keep waiting
       lastTransitionState = sensorIsOn;
       lastTransitionTime = millis();
-      logmsg("sensor update: waiting for more blinks\n");
+      tlog.logmsg(name + String(" update: waiting for more blinks"));
       return previousAnalysis;
     }
   }
 
   // NOTREACHED (error, unknown state)
   return isBroken;
+}
+
+uint8_t DelayedSensor::getCurrentAnalysis()
+{
+  return currentAnalysis;
+}
+
+String DelayedSensor::getCurrentAnalysisAsString()
+{
+  switch (currentAnalysis) {
+  case isOff:
+    return String("off");
+  case isBlinking:
+    return String("blinking");
+  case isOn:
+    return String("on");
+  case isUnknown:
+    return String("unknown");
+  case turnedOff:
+    return String("turned off");
+  case turnedOn:
+    return String("turned on");
+  case stoppedBeingOn:
+    return String("stopped being on");
+  case startedBlinking:
+    return String("started blinking");
+  case isBroken:
+  default:
+    return String("is broken");
+  }
+  /* notreached */
 }
