@@ -108,6 +108,8 @@ void handleLocalStatus()
   r = templ.addRepvar(r, String("@S2T@"), String((millis() - lastS2Change)/1000));
   r = templ.addRepvar(r, String("@DryState@"), dryerSensor.getCurrentAnalysisAsString());
   r = templ.addRepvar(r, String("@WashState@"), washerSensor.getCurrentAnalysisAsString());
+  r = templ.addRepvar(r, String("@WASHALERT@"), nextWasherAlertTime ? "true" : "false");
+  r = templ.addRepvar(r, String("@DRYALERT@"), nextDryerAlertTime ? "true" : "false");
 
   fs::File f = SPIFFS.open("/status2.html", "r");
   templ.generateOutput(&server, f, r);
