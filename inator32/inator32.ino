@@ -35,6 +35,7 @@ Debounce rawsensor1, rawsensor2;
 DelayedSensor washerSensor("washer"), dryerSensor("dryer");
 uint8_t s1out, s2out;
 Debounce rawButton;
+  
 
 #ifndef MIN
 #define MIN(x,y) ((x)<(y) ? (x) : (y))
@@ -43,6 +44,7 @@ Debounce rawButton;
 bool currentState;
 uint32_t lastS1Change;
 uint32_t lastS2Change;
+uint32_t nextWasherAlertTime = 0, nextDryerAlertTime = 0;
 
 WashPrefs myprefs;
 TCPLogger tlog;
@@ -194,32 +196,6 @@ int sendDiscordAlert(String msg)
   return httpResponseCode;
 }
 
-void my_discord_loop()
-{
-  static bool lastAlertingState = false;
-  static uint32_t nextNotice = 0;
-
-  /*
-  if (washerLSM.isAlerting() != lastAlertingState) {
-    Serial.print("change status from ");
-    Serial.print(lastAlertingState ? "true" : "false");
-    Serial.print(" to ");
-    Serial.println(washerLSM.isAlerting() ? "true" : "false");
-    lastAlertingState = washerLSM.isAlerting();
-    if (lastAlertingState) {
-      nextNotice = 0; // reset notice so we'll send something now
-    } else {
-      // We only alert once on close/end-of-alert
-      sendDiscordAlert("Washinator is (closed)");
-    }
-  }
-  */
-  if (lastAlertingState && (millis() >= nextNotice)) {
-    nextNotice = millis() + 10 * 60 * 1000; // 10 minutes
-    sendDiscordAlert("Washinator is (open)");
-  }
-}
-
 void sensor_loop()
 {
   // FIXME: for both of these sensors, the analogRead values are
@@ -271,20 +247,7 @@ void sensor_loop()
 
 void button_loop()
 {
-  // If we're delaying before re-alterting or playing the tune, and
-  // the button's pressed, then abort; that's confirmation that alert
-  // was received
-  /*
-  if (washerLSM.isAlerting() && buttonIsPressed()) {
-    washerLSM.buttonPressed();
-    // Shut off the LEDs and delay a short time so we don't accidentally
-    // trigger the sensor on our own LEDs
-    //    digitalWrite(ALERT_LED, LOW);
-    //    digitalWrite(SENSOR_LED, LOW);
-    delay(200);
-    return; // abandon this run - do not update lsm's sensor readings
-  }
-  */
+  nextWasherAlertTime = nextDryerAlertTime = 0;
 }
 
 
@@ -295,17 +258,24 @@ void loop()
   tlog.loop();
 
   // Track the alerting state with the alert LED
-  /*
-  if (washerLSM.isAlerting()) {
+  if (nextWasherAlertTime || nextDryerAlertTime) {
     digitalWrite(ALERT_LED, HIGH);
     currentState = true;
   } else {
     digitalWrite(ALERT_LED, LOW);
     currentState = false;
-    }*/
+  }
 
+  // Check to see if we need to send any discord updates
   if (myprefs.discordEnabled) {
-    my_discord_loop();
+    if (nextWasherAlertTime && (millis() >= nextWasherAlertTime)) {
+      sendDiscordAlert("The washer is done");
+      nextWasherAlertTime = millis() + 10 * 6000;
+    }
+    if (nextDryerAlertTime && (millis() >= nextDryerAlertTime)) {
+      sendDiscordAlert("The dryer is done");
+      nextDryerAlertTime = 0; // Dryer does not nag
+    }
   }
 
   // FIXME names of these methods -- this is being used to update homekit status
@@ -358,6 +328,14 @@ void washerCallback(bool state)
     sendNotification(myprefs.washerNotificationURL, String(state ? "1" : "0"));
     didOnce = true;
     lastState = state;
+
+    if (state) {
+      // Stop any alerts that are running
+      nextWasherAlertTime = 0;
+    } else {
+      // Set up a Discord alert
+      nextWasherAlertTime = millis() + 10 * 1000; // give it 10 seconds to check that it's right
+    }
   }
 }
 
@@ -370,5 +348,11 @@ void dryerCallback(bool state)
     sendNotification(myprefs.dryerNotificationURL, String(state ? "1" : "0"));
     didOnce = true;
     lastState = state;
+    if (state) {
+      nextDryerAlertTime = 0;
+    } else {
+      // Set up a Discord alert for the dryer stopping.
+      nextDryerAlertTime = millis() + 10 * 1000; // give it 10 seconds to check that it's right
+    }
   }
 }

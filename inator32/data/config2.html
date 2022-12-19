@@ -1,0 +1,18 @@
+<form action='/submit2' method='post'>
+  <div><label for='discordEnabled'>discordEnabled:</label>
+    <input type='checkbox' name='discordEnabled' value='discordEnabled' @DE@ />
+  </div>
+  <div><label for='discordURL'>Discord Webhook URL:</label>
+    <input type='text' id='discordURL' name='discordURL' value='@DU@' />
+  </div>
+  <div><label for='currentState'>currentState:</label>
+    <input type='checkbox' name='currentState' value='currentState' @CS@ />
+  </div>
+  <div><label for='washerNotificationURL'>Washer notification URL:</label>
+    <input type='text' id='washerNotificationURL' name='washerNotificationURL' value='@WURL@' />
+  </div>
+  <div><label for='dryerNotificationURL'>Dryer notification URL:</label>
+    <input type='text' id='dryerNotificationURL' name='dryerNotificationURL' value='@DURL@' />
+  </div>
+  <div><input type='submit' value='Save' /></div>
+</form>
