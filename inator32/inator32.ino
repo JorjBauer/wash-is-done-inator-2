@@ -185,6 +185,7 @@ int sendDiscordAlert(String msg)
     return 503;
   }
 
+  tlog.logmsg(String("Sending discord alert: ") + msg);
   HTTPClient http;
   http.begin(myprefs.discordURL);
   http.addHeader("Content-Type", "application/json");
@@ -336,6 +337,7 @@ void washerCallback(bool state)
       nextWasherAlertTime = 0;
     } else {
       // Set up a Discord alert
+      tlog.logmsg("Washer will alert in 10 seconds");
       nextWasherAlertTime = millis() + 10 * 1000; // give it 10 seconds to check that it's right
     }
   }
@@ -354,6 +356,7 @@ void dryerCallback(bool state)
       nextDryerAlertTime = 0;
     } else {
       // Set up a Discord alert for the dryer stopping.
+      tlog.logmsg("Dryer will alert in 10 seconds");
       nextDryerAlertTime = millis() + 10 * 1000; // give it 10 seconds to check that it's right
     }
   }
