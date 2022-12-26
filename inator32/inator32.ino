@@ -205,10 +205,10 @@ void sensor_loop()
   // somewhat arbitrary; it's what is working for each of my
   // sensors. These should be tunables.
   uint16_t raw1 = analogRead(pin_sensor1);
-  bool tmpState1 = raw1 >= 2800;
+  bool tmpState1 = raw1 >= 2700;
   rawsensor1.input(tmpState1);
   uint16_t raw2 = analogRead(pin_sensor2);
-  bool tmpState2 = raw2 >= 2800;
+  bool tmpState2 = raw2 >= 2700;
   rawsensor2.input(tmpState2);
 
   bool raw1out = rawsensor1.output();
@@ -250,7 +250,9 @@ void sensor_loop()
 
 void button_loop()
 {
-  nextWasherAlertTime = nextDryerAlertTime = 0;
+  if (buttonIsPressed()) {
+    nextWasherAlertTime = nextDryerAlertTime = 0;
+  }
 }
 
 
@@ -274,6 +276,7 @@ void loop()
     if (nextWasherAlertTime && (millis() >= nextWasherAlertTime)) {
       sendDiscordAlert("The washer is done");
       nextWasherAlertTime = millis() + 10 * 6000;
+      tlog.logmsg("bump washer alert 10 minutes");
     }
     if (nextDryerAlertTime && (millis() >= nextDryerAlertTime)) {
       sendDiscordAlert("The dryer is done");
@@ -324,6 +327,8 @@ int sendNotification(const char *url, String msg)
 
 void washerCallback(bool state)
 {
+  tlog.logmsg("washerCallback");
+  
   static bool didOnce = false;
   static bool lastState = false;
   if (!didOnce || (state != lastState)) {
@@ -334,6 +339,7 @@ void washerCallback(bool state)
 
     if (state) {
       // Stop any alerts that are running
+      tlog.logmsg("Washer update cleared");
       nextWasherAlertTime = 0;
     } else {
       // Set up a Discord alert
