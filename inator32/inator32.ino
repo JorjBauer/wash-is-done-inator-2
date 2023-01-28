@@ -243,7 +243,7 @@ void sensor_loop()
   bool raw1out = rawsensor1.output();
   bool raw2out = rawsensor2.output();
   
-  //  s1out = washerSensor.input(raw1out);
+  s1out = washerSensor.input(raw1out);
   //  s2out = dryerSensor.input(raw2out);
 
   static bool prevs1;
@@ -355,18 +355,10 @@ int sendNotification(const char *url, String msg)
 
 void washerCallback(bool state)
 {
-  static bool tmp = false;
-  if (state != tmp) {
-    tlog.logmsg(String("washerCallback changed to ") + String(state ? "true" : "false"));
-    tmp = state;
-  }
-  
-  static bool didOnce = false;
   static bool lastState = false;
-  if (!didOnce || (state != lastState)) {
+  if (state != lastState) {
     tlog.logmsg(String("Washer: ") + String(state ? "true" : "false"));
     sendNotification(myprefs.washerNotificationURL, String(state ? "1" : "0"));
-    didOnce = true;
     lastState = state;
 
     if (state) {
@@ -385,12 +377,10 @@ void washerCallback(bool state)
 
 void dryerCallback(bool state)
 {
-  static bool didOnce = false;
   static bool lastState = false;
-  if (!didOnce || (state != lastState)) {
+  if (state != lastState) {
     tlog.logmsg(String("Dryer: ") + String(state ? "true" : "false"));
     sendNotification(myprefs.dryerNotificationURL, String(state ? "1" : "0"));
-    didOnce = true;
     lastState = state;
     if (state) {
       nextDryerAlertTime = 0;
