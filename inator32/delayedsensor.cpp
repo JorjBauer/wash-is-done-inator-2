@@ -27,8 +27,8 @@ DelayedSensor::~DelayedSensor()
 
 void DelayedSensor::reset()
 {
-  currentAnalysis = isUnknown;
-  previousAnalysis = isUnknown;
+  currentAnalysis = isOff;
+  previousAnalysis = isOff;
   lastTransitionTime = 0;
   transitionCount = 0;
   lastTransitionState = false;

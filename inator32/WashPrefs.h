@@ -19,6 +19,7 @@ struct WashPrefs : public Prefs {
   char discordURL[150];
   char washerNotificationURL[150];
   char dryerNotificationURL[150];
+  char messageURL[150];
 };
 
 #endif

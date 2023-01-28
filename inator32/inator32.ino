@@ -45,11 +45,28 @@ bool currentState;
 uint32_t lastS1Change;
 uint32_t lastS2Change;
 uint32_t nextWasherAlertTime = 0, nextDryerAlertTime = 0;
+uint8_t nextWasherAlertLevel = 0, nextDryerAlertLevel = 0;
 
 WashPrefs myprefs;
 TCPLogger tlog;
 WebManager server(80);
 WifiManager wifi;
+
+#define NUM_MESSAGES 13
+const char *messages[13] = {
+  "The %s is done",
+  "The %s is still done",
+  "The %s continues to be done",
+  "The %s has finished its crossword puzzle",
+  "The %s really wants some attention",
+  "The %s is feeling lonely",
+  "The %s would like you to know it misses you",
+  "The %s is starting to think you don't like it any more",
+  "The %s is looking up phone numbers for divorce lawyers",
+  "The %s is seeking new friends",
+  "The %s says, 'HEEEELP MEEEEE'",
+  "The %s is ignoring you",
+  "The %s refuses to run any more loads until you apologize" };
 
 void handleLocalConfig()
 {
@@ -57,6 +74,7 @@ void handleLocalConfig()
 
   repvars *r = templ.newRepvar(String("@DU@"), String(myprefs.discordURL));
   r = templ.addRepvar(r, String("@DE@"), String(myprefs.discordEnabled ? "checked" : ""));
+  r = templ.addRepvar(r, String("@CU@"), String(myprefs.messageURL));
   r = templ.addRepvar(r, String("@CS@"), String(currentState ? "checked" : ""));
   r = templ.addRepvar(r, String("@WURL@"), String(myprefs.washerNotificationURL));
   r = templ.addRepvar(r, String("@DURL@"), String(myprefs.dryerNotificationURL));
@@ -71,11 +89,13 @@ void handleLocalConfig()
 void handleLocalSubmit()
 {
   String new_discordURL = server.arg("discordURL");
+  String new_messageURL = server.arg("messageURL");
   String new_washerURL = server.arg("washerNotificationURL");
   String new_dryerURL = server.arg("dryerNotificationURL");
 
   myprefs.discordEnabled = server.arg("discordEnabled").isEmpty() ? 0 : 1;
   strncpy(myprefs.discordURL, new_discordURL.c_str(), sizeof(myprefs.discordURL));
+  strncpy(myprefs.messageURL, new_messageURL.c_str(), sizeof(myprefs.messageURL));
   strncpy(myprefs.washerNotificationURL, new_washerURL.c_str(), sizeof(myprefs.washerNotificationURL));
   strncpy(myprefs.dryerNotificationURL, new_dryerURL.c_str(), sizeof(myprefs.dryerNotificationURL));
 
@@ -93,6 +113,7 @@ void handleLocalStatus()
   server.SendHeader();
 
   repvars *r = templ.newRepvar(String("@DISCORDURL@"), String(myprefs.discordURL));
+  r = templ.addRepvar(r, String("@CU@"), String(myprefs.messageURL));
   r = templ.addRepvar(r, String("@WASHERURL@"), String(myprefs.washerNotificationURL));
   r = templ.addRepvar(r, String("@DRYERURL@"), String(myprefs.dryerNotificationURL));
   r = templ.addRepvar(r, String("@DSE@"), String(myprefs.discordEnabled ? "true" : "false"));
@@ -120,6 +141,8 @@ void handleLocalStatus()
 
 void handleStop()
 {
+  nextWasherAlertTime = nextDryerAlertTime = 0;
+  nextWasherAlertLevel = nextDryerAlertLevel = 0;
   // Redirect to /status to show the changes
   server.sendHeader(F("Location"), String("/status"), true);
   server.send(302, "text/plain", "");
@@ -178,25 +201,29 @@ void setup()
   delay(1000);
 }
 
-int sendDiscordAlert(String msg)
+void sendAlerts(String msg)
 {
-  if (!myprefs.discordURL[0]) {
-    Serial.println("Unable to send Discord alert; no webhook URL configured");
-    return 503;
+  if (myprefs.discordEnabled && myprefs.discordURL[0]) {
+    tlog.logmsg(String("Sending discord alert: ") + msg);
+    HTTPClient http;
+    http.begin(myprefs.discordURL);
+    http.addHeader("Content-Type", "application/json");
+    
+    JSONVar requestObject;
+    requestObject["content"] = msg.c_str();
+    
+    int httpResponseCode = http.POST(JSON.stringify(requestObject));
+    http.end();
   }
 
-  tlog.logmsg(String("Sending discord alert: ") + msg);
-  HTTPClient http;
-  http.begin(myprefs.discordURL);
-  http.addHeader("Content-Type", "application/json");
-
-  JSONVar requestObject;
-  requestObject["content"] = msg.c_str();
-
-  int httpResponseCode = http.POST(JSON.stringify(requestObject));
-  http.end();
-  
-  return httpResponseCode;
+  if (myprefs.messageURL[0]) {
+    HTTPClient http;
+    String u = myprefs.messageURL;
+    http.begin(u);
+    http.addHeader("Content-Type", "text/plain");
+    http.POST(msg);
+    http.end();
+  }
 }
 
 void sensor_loop()
@@ -204,18 +231,20 @@ void sensor_loop()
   // FIXME: for both of these sensors, the analogRead values are
   // somewhat arbitrary; it's what is working for each of my
   // sensors. These should be tunables.
-  uint16_t raw1 = analogRead(pin_sensor1);
-  bool tmpState1 = raw1 >= 2700;
+  //  uint16_t raw1 = analogRead(pin_sensor1);
+  bool tmpState1 = !digitalRead(pin_sensor1);
+  //  bool tmpState1 = (raw1 >= 2700);
   rawsensor1.input(tmpState1);
-  uint16_t raw2 = analogRead(pin_sensor2);
-  bool tmpState2 = raw2 >= 2700;
+  //  uint16_t raw2 = analogRead(pin_sensor2);
+  //  bool tmpState2 = (raw2 >= 2700);
+  bool tmpState2 = !digitalRead(pin_sensor2);
   rawsensor2.input(tmpState2);
 
   bool raw1out = rawsensor1.output();
   bool raw2out = rawsensor2.output();
   
-  s1out = washerSensor.input(raw1out);
-  s2out = dryerSensor.input(raw2out);
+  //  s1out = washerSensor.input(raw1out);
+  //  s2out = dryerSensor.input(raw2out);
 
   static bool prevs1;
   if (tmpState1 != prevs1) {
@@ -252,6 +281,7 @@ void button_loop()
 {
   if (buttonIsPressed()) {
     nextWasherAlertTime = nextDryerAlertTime = 0;
+    nextWasherAlertLevel = nextDryerAlertLevel = 0;
   }
 }
 
@@ -271,17 +301,20 @@ void loop()
     currentState = false;
   }
 
-  // Check to see if we need to send any discord updates
-  if (myprefs.discordEnabled) {
-    if (nextWasherAlertTime && (millis() >= nextWasherAlertTime)) {
-      sendDiscordAlert("The washer is done");
-      nextWasherAlertTime = millis() + 10 * 6000;
-      tlog.logmsg("bump washer alert 10 minutes");
-    }
-    if (nextDryerAlertTime && (millis() >= nextDryerAlertTime)) {
-      sendDiscordAlert("The dryer is done");
-      nextDryerAlertTime = 0; // Dryer does not nag
-    }
+  // Check to see if we need to send any updates
+  char msg[100];
+  if (nextWasherAlertTime && (millis() >= nextWasherAlertTime)) {
+    sprintf(msg, messages[nextWasherAlertLevel >= NUM_MESSAGES ? (NUM_MESSAGES-1) : nextWasherAlertLevel], "washer");
+    sendAlerts(msg);
+    nextWasherAlertTime = millis() + 10 * 60 * 1000;
+    tlog.logmsg("bump washer alert 10 minutes");
+    nextWasherAlertLevel++;
+  }
+  if (nextDryerAlertTime && (millis() >= nextDryerAlertTime)) {
+    sprintf(msg, messages[nextDryerAlertLevel >= NUM_MESSAGES ? (NUM_MESSAGES-1) : nextDryerAlertLevel], "dryer");
+    sendAlerts(msg);
+    nextDryerAlertTime = 0; // Dryer does not nag. Or get lonely. It's confident in its self-worth.
+    nextDryerAlertLevel++;
   }
 
   // FIXME names of these methods -- this is being used to update homekit status
@@ -299,11 +332,6 @@ bool buttonIsPressed()
   rawButton.input(r < 100);
   return rawButton.output();
   //  return (analogRead(pin_switch) < (2*4095/3));
-}
-
-void handleRestart()
-{
-  ESP.restart();
 }
 
 int sendNotification(const char *url, String msg)
@@ -327,7 +355,11 @@ int sendNotification(const char *url, String msg)
 
 void washerCallback(bool state)
 {
-  tlog.logmsg("washerCallback");
+  static bool tmp = false;
+  if (state != tmp) {
+    tlog.logmsg(String("washerCallback changed to ") + String(state ? "true" : "false"));
+    tmp = state;
+  }
   
   static bool didOnce = false;
   static bool lastState = false;
@@ -341,10 +373,12 @@ void washerCallback(bool state)
       // Stop any alerts that are running
       tlog.logmsg("Washer update cleared");
       nextWasherAlertTime = 0;
+      nextWasherAlertLevel = 0;
     } else {
       // Set up a Discord alert
       tlog.logmsg("Washer will alert in 10 seconds");
       nextWasherAlertTime = millis() + 10 * 1000; // give it 10 seconds to check that it's right
+      nextWasherAlertLevel = 0;
     }
   }
 }
@@ -360,10 +394,12 @@ void dryerCallback(bool state)
     lastState = state;
     if (state) {
       nextDryerAlertTime = 0;
+      nextDryerAlertLevel = 0;
     } else {
       // Set up a Discord alert for the dryer stopping.
       tlog.logmsg("Dryer will alert in 10 seconds");
       nextDryerAlertTime = millis() + 10 * 1000; // give it 10 seconds to check that it's right
+      nextDryerAlertLevel = 0;
     }
   }
 }
